@@ -26,7 +26,7 @@ The production output is `dist/`. Serve it from any static HTTPS host. Core libr
 ## Using the application
 
 1. Choose a music folder. Its subfolders are scanned recursively. Portable folder and multiple-file selection are available when direct access is unavailable.
-2. Open an existing M3U/M3U8 from the sidebar, or create a playlist. A single discovered playlist is opened automatically. Scanning never adds discovered tracks to an existing playlist.
+2. Press a track's **Play** button to listen immediately, even without a playlist. Open an existing M3U/M3U8 from the sidebar, or create a playlist when you want to save an order. A single visible discovered playlist is opened automatically. Scanning never adds discovered tracks to an existing playlist.
 3. In **All tracks**, use Add, Add & Play, or multi-selection to add tracks. Albums and folder/artist filters help browse your collection.
 4. In **Playlist**, select with checkboxes, Ctrl/Cmd-click, or Shift-click. Drag a handle to move the selected group. Move up/down buttons and Alt+Arrow keys provide keyboard reordering. Clear filters and select playlist order before reordering.
 5. Undo/redo operates on the draft. Removing a track removes only its playlist occurrence. Repeated tracks are preserved as distinct occurrences.
@@ -34,7 +34,11 @@ The production output is `dist/`. Serve it from any static HTTPS host. Core libr
 
 Keyboard shortcuts: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redo, Ctrl/Cmd+S save/export, Ctrl/Cmd+A select the visible filtered list, Delete remove selected playlist occurrences, Escape clear selection or cancel dragging, arrows navigate rows, Enter play a row. Shortcuts do not intercept editing in input fields.
 
-The persistent player supports play/pause, previous/next, seeking, volume/mute, shuffle, and repeat off/all/one. Playback follows the active draft. Switching playlists stops playback; reordering preserves the current occurrence. Removing the playing occurrence advances to its surviving successor.
+The persistent player supports play/pause, previous/next, seeking, volume/mute, shuffle, and repeat off/all/one. Library Play captures the visible filtered/sorted list without changing membership; later filters do not alter that queue. Playlist playback follows the active draft, preserves the playing occurrence on reorder, and advances to its surviving successor on removal. Selecting or creating a playlist leaves a library queue playing. Switching active playlists stops a playlist queue; switching libraries stops either queue. Add & Play switches to the playlist only after the add succeeds.
+
+New visitors can start or skip a short guided tour. Restart it from the Help/browser-capabilities panel. Icon controls have hover/focus hints. Right-click a track or sidebar row for contextual actions, use Shift+F10/context-menu key from the keyboard, or use the ellipsis button on touch devices. Right-click within an existing selection preserves the selected group.
+
+Playlist menus offer **Remove from app** or **Discard draft**, with confirmation before losing unsaved edits/history. On-disk playlists removed from the app stay hidden across Refresh/reload; **Manage playlists** restores them. In direct mode, **Delete playlist file** requires explicit confirmation and write permission. It targets only the named M3U/M3U8, checks its expected bytes, deletes non-recursively, and verifies absence. Deletion is permanent and outside edit undo. Portable mode uses your file manager for physical deletion. Legacy M3U sources and imported M3U8 drafts are separate targets. Audio files are never deleted.
 
 Collapse the desktop sidebar into an icon rail; its preference survives reopening. Below 768 px, navigation opens in a modal drawer. On phones, expand the compact player for the complete transport, volume, and audio details. Player sheets do not replace the native audio element or restart playback. Use **Select tracks** for touch selection, then drag a handle after holding it briefly, or use Move up/down. Track actions offer explicit Add and Add & Play.
 
@@ -82,7 +86,7 @@ IndexedDB stores registrations, supported folder handles, inventories, metadata/
 
 Saving is explicit. The saved baseline advances only after read-back verification. Permission, stale-source, write, close, and verification failures preserve the draft. An uncertain save freezes further edits to that draft until **Reconcile** checks the actual file. Verified filesystem success remains success if a subsequent browser-cache update fails; that cache failure is shown separately.
 
-There is no cross-resource transaction or automatic rollback. Creating a target may leave an empty playlist on failure. A failed or canceled download cannot be verified, so the UI reports **Download requested**, not saved. External applications can change a file during the narrow validation/write interval; browser APIs do not provide atomic compare-and-swap. Same-library application tabs use Web Locks when available.
+There is no cross-resource transaction or automatic rollback. Creating a target may leave an empty playlist on failure. A failed or canceled download cannot be verified, so the UI reports **Download requested**, not saved. External applications can change a file during the narrow validation/write or validation/delete interval; browser APIs do not provide atomic compare-and-swap. Same-library application tabs use Web Locks for saving and deletion when available. Unverified deletion preserves browser state until the confirmation dialog's **Reconcile deletion** checks the file; verified deletion remains committed if browser-cache storage subsequently fails. Targets exceeding the 16 MiB inspection limit must be deleted through the file manager.
 
 Use Refresh to discover external changes; automatic filesystem watching is not included. Permission revocation, private browsing, quota limits, cleared site data, and storage eviction may require reconnecting or rebuilding caches. Save/export files are the durable playlist copy.
 
@@ -107,7 +111,7 @@ npm run test:e2e
 
 Vitest covers playlist/path safety, numbered imports, group editing/history, queue traversal, adapter boundaries, metadata fixtures, IndexedDB recovery, and save failure/commit behavior. Playwright covers portable workflows across Chromium, Firefox and WebKit, draft recovery, export contents, group drag/cancel, selection/search on 10,000 tracks, and playback on supported test platforms.
 
-Direct save tests inject a directory-handle adapter backed by isolated temporary files. They verify saved bytes, conflict rejection, uncertain-save reconciliation, and unchanged audio bytes. These tests exercise the application protocol; they do not automate native OS pickers or real browser permission persistence. Temporary fixtures use generated PCM audio, never user music.
+Direct save/deletion tests inject a directory-handle adapter backed by isolated temporary files. They verify saved bytes, confirmed playlist-only deletion, conflict rejection, uncertain-operation reconciliation, and unchanged audio bytes. These tests exercise the application protocol; they do not automate native OS pickers or real browser permission persistence. Temporary fixtures use generated PCM audio, never user music.
 
 Playwright WebKit on Windows lacks native audio decoding; its playback test is skipped there. WebKit browser tests are Safari-engine checks, not a substitute for testing real Safari on macOS.
 

@@ -1,7 +1,8 @@
-import type { PlaylistEntry } from '../domain/models'
+export interface QueueItem { id: string; trackId?: string }
+export type QueueContext = { kind: 'library'; libraryId: string } | { kind: 'playlist'; libraryId: string; sessionId: string }
 export type Repeat = 'off' | 'all' | 'one'
 export class PlaybackQueue {
-  entries: PlaylistEntry[] = []
+  entries: QueueItem[] = []
   current: string | null = null
   shuffle = false
   repeat: Repeat = 'off'
@@ -19,7 +20,7 @@ export class PlaybackQueue {
     this.history = []
     this.future = this.randomized(this.entries.filter(e => e.id !== this.current && !this.unavailable.has(e.id)).map(e => e.id))
   }
-  reconcile(entries: PlaylistEntry[]): string | null {
+  reconcile(entries: QueueItem[]): string | null {
     const oldIndex = this.entries.findIndex(e => e.id === this.current)
     const ids = new Set(entries.map(e => e.id))
     const successor = this.entries.slice(oldIndex + 1).find(e => ids.has(e.id))?.id ?? null

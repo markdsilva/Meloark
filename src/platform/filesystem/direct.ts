@@ -1,11 +1,13 @@
 import { normalizeRelative } from '../../playlists/paths'
 import { verifiedWrite } from './saveProtocol'
+import { validatePlaylistDeletion, verifiedDelete } from './deleteProtocol'
 import { MAX_BYTES } from '../../playlists/codec'
 import type { DirectoryHandle, FileDescriptor, LibrarySource } from './types'
 
 export class DirectSource implements LibrarySource {
   readonly kind = 'direct' as const
   readonly name: string
+  get canDeletePlaylists() { return typeof this.root.removeEntry === 'function' }
   private handles = new Map<string, FileSystemFileHandle>()
   constructor(readonly root: DirectoryHandle) { this.name = root.name }
   async *scan(signal: AbortSignal): AsyncIterable<FileDescriptor> {
@@ -72,5 +74,22 @@ export class DirectSource implements LibrarySource {
         return { write: data => stream.write(new Uint8Array(data).buffer), close: () => stream.close(), abort: () => stream.abort() }
       },
     })
+  }
+  async deletePlaylist(path: string, expected: Uint8Array) {
+    validatePlaylistDeletion(path)
+    if ((await this.getAccess()).write !== 'granted') throw new Error('Write permission is required to delete a playlist file.')
+    const { directory, name } = await this.parent(path)
+    if (typeof directory.removeEntry !== 'function') throw new Error('Playlist file deletion is unavailable. Use your file manager instead.')
+    const read = async () => {
+      try {
+        // getFileHandle also rejects directories; removal never recursively traverses them.
+        const file = await (await directory.getFileHandle(name)).getFile()
+        if (file.size > MAX_BYTES) throw new Error('This playlist exceeds the inspection limit. Use your file manager instead.')
+        return new Uint8Array(await file.arrayBuffer())
+      } catch (error) { if (error instanceof DOMException && error.name === 'NotFoundError') return null; throw error }
+    }
+    const receipt = await verifiedDelete(path, expected, { read, remove: () => directory.removeEntry(name, { recursive: false }) })
+    this.handles.delete(path)
+    return receipt
   }
 }

@@ -8,7 +8,7 @@ import type { Access } from '../../platform/filesystem/types'
 import { Dialog } from '../shared/Dialog'
 
 type Status = 'Available' | 'Limited' | 'Unavailable' | 'Not yet verified'
-export function CapabilityDialog({ capabilities: c, close }: { capabilities: Capabilities; close: () => void }) {
+export function CapabilityDialog({ capabilities: c, close, tour }: { capabilities: Capabilities; close: () => void; tour?: () => void }) {
   const library = useApp(s => s.libraries.find(l => l.id === s.activeLibrary))
   const outcomes = usePlatformStatus()
   const libraryId = library?.id
@@ -22,7 +22,10 @@ export function CapabilityDialog({ capabilities: c, close }: { capabilities: Cap
   }, [libraryId, library?.connected])
   const storage: Status = !c.indexedDB || outcomes.storage === 'unavailable' ? 'Unavailable' : outcomes.storage === 'limited' ? 'Limited' : outcomes.storage === 'available' ? 'Available' : 'Not yet verified'
   const handles: Status = !c.handlePersistence ? 'Unavailable' : outcomes.handles === 'available' && storage === 'Available' ? 'Available' : outcomes.handles === 'limited' || storage === 'Unavailable' || storage === 'Limited' ? 'Limited' : 'Not yet verified'
+  const source = library ? sources.get(library.id) : undefined
+  const deletion: Status = !c.directoryPicker ? 'Unavailable' : library?.kind === 'portable' ? 'Limited' : source?.canDeletePlaylists === true ? 'Available' : source?.canDeletePlaylists === false ? 'Unavailable' : 'Not yet verified'
   const rows: [string, Status, string][] = [
+    ['Playlist file deletion', deletion, deletion === 'Not yet verified' ? 'Choose a direct-access library to verify support. Deletion requires separate confirmation and write permission.' : 'Deletes only an explicitly confirmed playlist file. Write permission is separate. Portable mode uses your file manager.'],
     ['Direct folder access', c.directoryPicker ? 'Available' : 'Unavailable', c.directoryPicker ? 'Select a folder to grant access. Permissions may need renewal.' : !c.secure ? 'Requires HTTPS or localhost. Portable selection still works.' : 'Use portable folder or file selection here.'],
     ['Portable folder selection', c.directoryInput ? 'Available' : 'Unavailable', c.directoryInput ? 'Reads selected subfolders. Your device picker may restrict folder selection; files need reselection after reload.' : 'Select multiple files instead.'],
     ['Multiple-file selection', 'Available', 'Choose local audio and playlist files. Folder paths may be unavailable.'],
@@ -36,6 +39,7 @@ export function CapabilityDialog({ capabilities: c, close }: { capabilities: Cap
     ['Media-key integration', c.mediaSession ? 'Available' : 'Unavailable', c.mediaSession ? 'Media Session is present; individual key and lock-screen behaviour varies.' : 'Use the player controls in the application.'],
   ]
   return <Dialog title="Your browser, your library" close={close} wide>
+    {tour && <div className="help-guide"><span>Learn how to listen and create a playlist.</span><button className="button secondary" onClick={tour}>Start tour</button></div>}
     <p className="dialog-intro">Support is detected on this browser. Available APIs do not mean permission has already been granted.</p>
     {outcomes.pickerReason && <p className="callout">Observed folder-access failure: {outcomes.pickerReason}. Portable selection and Export remain available.</p>}
     {library && <section className="capability-current"><strong>Current library: {library.name}</strong><p>{library.kind === 'portable' ? `${library.connected ? 'Connected portable selection' : 'Reselection required'} · Export only` : `Read: ${access?.read ?? 'checking'} · Write: ${access?.write ?? 'checking'}${access?.reconnect || !library.connected ? ' · Reconnect required' : ''}`}</p></section>}

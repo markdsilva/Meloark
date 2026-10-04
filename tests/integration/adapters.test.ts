@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { PortableSource } from '../../src/platform/filesystem/portable'
 import { DirectSource } from '../../src/platform/filesystem/direct'
 import type { DirectoryHandle } from '../../src/platform/filesystem/types'
+import { File as NodeFile } from 'node:buffer'
 const file = (name: string, relative: string) => {
   const file = new File(['audio'], name)
   Object.defineProperty(file, 'webkitRelativePath', { value: relative })
@@ -26,6 +27,25 @@ describe('portable adapter', () => {
   })
 })
 describe('direct adapter boundaries', () => {
+  it('deletes only a verified playlist file without recursive removal', async () => {
+    let disk: File | undefined = new NodeFile(['#EXTM3U\n'], 'List.m3u8') as unknown as File
+    const expected = new Uint8Array(await disk.arrayBuffer())
+    const root = { name: 'Music', queryPermission: vi.fn(async () => 'granted'), removeEntry: vi.fn(async () => { disk = undefined }),
+      getFileHandle: vi.fn(async () => { if (!disk) throw new DOMException('Missing', 'NotFoundError'); return { getFile: async () => disk! } }),
+    } as unknown as DirectoryHandle
+    const source = new DirectSource(root)
+    expect(await source.deletePlaylist('List.m3u8', expected)).toEqual({ path: 'List.m3u8', deleted: true })
+    expect(root.removeEntry).toHaveBeenCalledWith('List.m3u8', { recursive: false })
+  })
+  it('rejects deletion permissions and playlist-named directories before removal', async () => {
+    const root = { name: 'Music', queryPermission: vi.fn(async () => 'denied'), removeEntry: vi.fn(), getFileHandle: vi.fn(async () => { throw new DOMException('Directory', 'TypeMismatchError') }) } as unknown as DirectoryHandle
+    const source = new DirectSource(root)
+    await expect(source.deletePlaylist('List.m3u8', new Uint8Array())).rejects.toThrow('permission')
+    expect(root.getFileHandle).not.toHaveBeenCalled()
+    root.queryPermission = async () => 'granted'
+    await expect(source.deletePlaylist('List.m3u8', new Uint8Array())).rejects.toThrow('Directory')
+    expect(root.removeEntry).not.toHaveBeenCalled()
+  })
   it('discovers nested folders and propagates unreadable-file failures', async () => {
     const handle = { kind: 'file', getFile: async () => ({ size: 10, lastModified: 12 }) }
     const album = { kind: 'directory', entries: async function* () { yield ['A.mp3', handle] } }

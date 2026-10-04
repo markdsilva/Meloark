@@ -436,3 +436,89 @@ input[type=range] { height: 28px; }
   .mode-options > label { min-width: 0; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* Shared controls: visual geometry stays compact; touch hit targets stay generous. */
+.app { transition: grid-template-columns var(--navigation-motion); }
+.ghost-button { width: 32px; height: 32px; border-radius: 6px; background: transparent; color: var(--muted); }
+.ghost-button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-text); }
+.ghost-button:active:not(:disabled) { background: var(--control-on-hover); box-shadow: inset 0 0 0 1px var(--border); }
+.navigation-toggle svg { transition: transform var(--navigation-motion); }
+.collapse-chevron { transform: rotate(180deg); }
+.context-actions { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.context-actions .nav-item { flex: 1; min-width: 0; }
+.sidebar .forget { width: 24px !important; height: 24px; opacity: 1; border-radius: 6px; color: var(--subtle); padding: 0; }
+.sidebar .forget:hover:not(:disabled) { color: var(--text); background: var(--surface); }
+.sidebar .row-more { width: 24px; height: 24px; color: var(--subtle); }
+.privacy-pill, .status-help { height: 32px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); }
+.privacy-pill { padding: 0 10px; }
+.privacy-pill:hover, .status-help:hover:not(:disabled) { background: var(--hover); border-color: var(--muted); }
+.search { border-color: var(--border); background: var(--surface); border-radius: var(--radius); min-width: 0; }
+.search:focus-within { border-color: var(--focus); box-shadow: 0 0 0 1px var(--accent-soft); }
+.search input:focus-visible { outline: none; }
+.browse-tabs { position: relative; }
+.browse-tabs button { border: 0; }
+.browse-tabs button.active { border: 0; }
+.tab-indicator { position: absolute; bottom: 0; left: 0; width: 24px; height: 3px; border-radius: 3px; background: var(--accent); pointer-events: none; transition: transform var(--navigation-motion); }
+.transport-buttons { gap: 6px; }
+.transport-buttons > .icon-button, .transport-buttons .volume .icon-button, .sheet-controls .icon-button { width: 32px; height: 32px; }
+.transport-play-hint { display: inline-flex; }
+.volume .volume-range { appearance: none; background: transparent; border: 0; height: 28px; }
+.volume-range::-webkit-slider-runnable-track { height: 3px; border-radius: 3px; background: linear-gradient(to right, var(--accent) var(--range-fill), var(--border) var(--range-fill)); }
+.volume-range::-webkit-slider-thumb { appearance: none; width: 10px; height: 10px; margin-top: -3.5px; border-radius: 50%; border: 0; background: var(--text); transition: transform var(--motion); }
+.volume-range:hover::-webkit-slider-thumb, .volume-range:active::-webkit-slider-thumb, .volume-range:focus-visible::-webkit-slider-thumb { transform: scale(1.2); }
+.volume-range::-moz-range-track { height: 3px; background: var(--border); border-radius: 3px; }
+.volume-range::-moz-range-progress { height: 3px; background: var(--accent); border-radius: 3px; }
+.volume-range::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; border: 0; background: var(--text); transition: transform var(--motion); }
+.volume-range:hover::-moz-range-thumb, .volume-range:active::-moz-range-thumb, .volume-range:focus-visible::-moz-range-thumb { transform: scale(1.2); }
+.track-header, .track-row { grid-template-columns: 91px minmax(150px, 2fr) minmax(85px, 1fr) 155px 48px 68px; }
+.track-action { display: flex; justify-content: flex-end; align-items: center; gap: 3px; }
+.track-action .icon-button { width: 30px; height: 30px; }
+.row-add { border-radius: 50%; }
+.track-row .row-add, .track-row .row-more { opacity: .55; }
+.track-row:hover .row-add, .track-row:hover .row-more, .track-row:focus-within .row-add, .track-row:focus-within .row-more, .track-row.selected .row-more { opacity: 1; }
+.action-menu { position: fixed; z-index: 80; width: min(260px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow: auto; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px; box-shadow: var(--shadow); }
+.action-menu button { width: 100%; text-align: left; padding: 9px 12px; min-height: 36px; border-radius: 5px; display: block; font-size: 12px; }
+.action-menu button:hover, .action-menu button:focus-visible { background: var(--hover); }
+.action-menu button[aria-checked=true] { color: var(--accent-text); background: var(--accent-soft); }
+.action-menu button[aria-disabled=true] { color: var(--subtle); cursor: default; }
+.action-menu small { display: block; margin-top: 2px; font-size: 10px; color: var(--muted); }
+.danger { color: var(--danger); }
+.danger-button { background: var(--danger-surface); color: var(--danger); border: 1px solid var(--danger); }
+.danger-button:hover:not(:disabled) { background: var(--elevated); }
+.tooltip { position: fixed; z-index: 100; pointer-events: none; max-width: 260px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); background: var(--elevated); font-size: 12px; box-shadow: var(--shadow); }
+.manage-playlists { font-size: 11px; color: var(--muted); }
+.manage-playlist-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.manage-playlist-row span, .playlist-path { overflow-wrap: anywhere; }
+.manage-playlist-row small { display: block; color: var(--muted); }
+.help-guide { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.guide-invitation, .guide-card { position: fixed; z-index: 50; right: 24px; bottom: 116px; background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 18px; }
+.guide-invitation { position: static; max-width: 470px; margin-top: 18px; box-shadow: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.guide-invitation > div { flex: 1; min-width: 170px; }
+.guide-invitation svg { color: var(--accent-text); }
+.guide-invitation p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+.guide-card { width: 320px; height: fit-content; max-height: calc(100dvh - 140px); overflow: auto; }
+.guide-card[style] { right: auto; bottom: auto; }
+.guide-heading, .guide-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.guide-heading small { color: var(--accent-text); font-size: 10px; letter-spacing: .8px; }
+.guide-card h3 { margin: 6px 0 8px; }
+.guide-card p { font-size: 13px; color: var(--muted); }
+.guide-actions { margin-top: 12px; }
+dialog .guide-card { position: static; width: 100%; max-height: none; margin-top: 16px; box-shadow: none; padding: 14px; }
+.guide-mobile-host .guide-card { position: static; width: auto; max-height: none; margin: 12px; box-shadow: none; }
+@media (max-width: 1200px) { .track-header, .track-row { grid-template-columns: 91px minmax(100px, 1fr) 150px 45px 68px; } }
+@media (max-width: 1050px) { .track-header, .track-row { grid-template-columns: 80px minmax(90px, 1fr) 125px 40px 64px; } }
+@media (max-width: 767px) {
+  .app { transition: none; }
+  .ghost-button, .sidebar .forget, .sidebar .row-more, .transport-buttons > .icon-button, .transport-buttons .volume .icon-button, .sheet-controls .icon-button { width: 44px !important; height: 44px; }
+  .browse-tools { grid-template-columns: minmax(0, 1fr) 44px 44px; }
+  .track-header, .track-row { grid-template-columns: 44px minmax(0, 1fr) 34px 88px; }
+  .track-row.selecting:has(.drag-handle) { grid-template-columns: 88px minmax(0, 1fr) 34px 88px; }
+  .track-action { flex-direction: row; }
+  .track-action .icon-button.row-add, .track-action .icon-button.row-more { display: inline-flex; width: 44px; height: 44px; opacity: 1; }
+  .track-action .warning { width: 44px; }
+  .track-title .artwork { display: none; }
+  .action-menu button { min-height: 44px; font-size: 14px; }
+  .guide-invitation, .guide-card { left: 12px; right: 12px; width: auto; bottom: calc(112px + env(safe-area-inset-bottom)); padding: 14px; }
+  .guide-card { max-height: min(260px, calc(100dvh - 140px)); }
+  .help-guide { align-items: flex-start; flex-direction: column; gap: 8px; }
+}

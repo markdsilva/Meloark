@@ -9,6 +9,7 @@ test('first visit offers capabilities and preserves portable access', async ({ p
   await page.getByRole('button', { name: 'See capabilities' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await expect(page.getByText('No music uploads')).toBeVisible()
+  await expect(page.getByText('Playlist file deletion', { exact: true }).locator('..').locator('..')).toContainText(info.project.name === 'chromium' ? 'Not yet verified' : 'Unavailable')
   await page.getByRole('button', { name: 'Got it' }).click()
   await expect(page.getByRole('button', { name: 'Choose a music folder' })).toBeEnabled()
 })

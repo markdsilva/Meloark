@@ -1,7 +1,8 @@
 ﻿import { useState } from 'react'
 import { Pause, Play, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX, LoaderCircle, ChevronUp, MoreHorizontal } from 'lucide-react'
+import type { CSSProperties } from 'react'
 import { usePlayer, player } from '../../playback/player'
-import { useApp } from '../../app/store'
+import { togglePlayback, useApp } from '../../app/store'
 import { Artwork } from '../shared/Artwork'
 import { elapsed } from '../shared/format'
 import { AudioDetails, AudioFacts, LiveReadout } from '../shared/AudioDetails'
@@ -13,28 +14,28 @@ import { detectCapabilities } from '../../platform/capabilities/detect'
 function Volume() {
   const volume = usePlayer(s => s.volume), muted = usePlayer(s => s.muted)
   const [capabilities] = useState(detectCapabilities)
-  return <div className="volume"><button className={`icon-button toggle-button ${muted ? 'active' : ''}`} aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={muted} title={muted ? 'Unmute' : 'Mute'} onClick={() => player.mute()}>{muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
-    {capabilities.volumeControl ? <input aria-label="Volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={event => player.setVolume(Number(event.target.value))} /> : <small>Use your device’s volume controls</small>}</div>
+  return <div className="volume"><button className={`icon-button toggle-button ${muted ? 'active' : ''}`} aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={muted} title={muted ? 'Unmute' : 'Mute'} onClick={() => player.mute()}>{muted ? <VolumeX size={20} /> : <Volume2 size={20} />}</button>
+    {capabilities.volumeControl ? <input className="volume-range" style={{ '--range-fill': `${volume * 100}%` } as CSSProperties} aria-label="Volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={event => player.setVolume(Number(event.target.value))} /> : <small>Use your device’s volume controls</small>}</div>
 }
 function Toggles() {
   const shuffle = usePlayer(s => s.shuffle), repeat = usePlayer(s => s.repeat)
-  return <><button className={`icon-button toggle-button ${shuffle ? 'active' : ''}`} aria-label="Shuffle" aria-pressed={shuffle} title={`Shuffle ${shuffle ? 'on' : 'off'}`} onClick={() => player.shuffle()}><Shuffle size={17} /></button>
-    <button className={`icon-button toggle-button ${repeat !== 'off' ? 'active' : ''}`} aria-label={`Repeat: ${repeat}`} aria-pressed={repeat !== 'off'} title={`Repeat ${repeat}`} onClick={() => player.repeat()}>{repeat === 'one' ? <Repeat1 size={17} /> : <Repeat size={17} />}</button></>
+  return <><button className={`icon-button toggle-button ${shuffle ? 'active' : ''}`} aria-label="Shuffle" aria-pressed={shuffle} title={`Shuffle ${shuffle ? 'on' : 'off'}`} onClick={() => player.shuffle()}><Shuffle size={20} /></button>
+    <button className={`icon-button toggle-button ${repeat !== 'off' ? 'active' : ''}`} aria-label={`Repeat: ${repeat}`} aria-pressed={repeat !== 'off'} title={`Repeat ${repeat}`} onClick={() => player.repeat()}>{repeat === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}</button></>
 }
 function Transport({ previous = true }: { previous?: boolean }) {
   const current = usePlayer(s => s.current), playing = usePlayer(s => s.playing), loading = usePlayer(s => s.loading)
-  const available = useApp(s => { const l = s.libraries.find(l => l.id === s.activeLibrary); return !!(l?.connected && l.activePlaylist && l.sessions[l.activePlaylist]?.entries.length) })
-  return <>{previous && <button className="icon-button" aria-label="Previous track" disabled={!current} onClick={() => player.previous()}><SkipBack size={20} fill="currentColor" /></button>}
-    <button className="play-button" aria-label={playing ? 'Pause' : 'Play'} disabled={!available} onClick={() => { void player.toggle() }}>{loading ? <LoaderCircle className="spin" size={21} /> : playing ? <Pause size={21} fill="currentColor" /> : <Play size={21} fill="currentColor" />}</button>
-    <button className="icon-button" aria-label="Next track" disabled={!current} onClick={() => player.next()}><SkipForward size={20} fill="currentColor" /></button></>
+  const available = useApp(s => { const l = s.libraries.find(l => l.id === s.activeLibrary); return !!(l?.connected && (current || (s.view === 'playlist' ? l.activePlaylist && l.sessions[l.activePlaylist]?.entries.length : s.visibleTrackIds.length))) })
+  return <>{previous && <button className="icon-button" aria-label="Previous track" disabled={!current} onClick={() => player.previous()}><SkipBack size={20} /></button>}
+    <span className="transport-play-hint" tabIndex={!available ? 0 : undefined} data-tooltip={!available ? 'Reconnect your library, or add tracks to play this playlist. All tracks lets you listen without a playlist.' : undefined}><button className="play-button" aria-label={playing ? 'Pause' : 'Play'} disabled={!available} onClick={togglePlayback}>{loading ? <LoaderCircle className="spin" size={21} /> : playing ? <Pause size={21} fill="currentColor" /> : <Play size={21} fill="currentColor" />}</button></span>
+    <button className="icon-button" aria-label="Next track" disabled={!current} onClick={() => player.next()}><SkipForward size={20} /></button></>
 }
 function Seek({ compact = false }: { compact?: boolean }) {
   const position = usePlayer(s => s.position), duration = usePlayer(s => s.duration)
   return <div className={`seek ${compact ? 'compact-seek' : ''}`}><span>{elapsed(position)}</span><input aria-label="Seek" type="range" min="0" max={duration || 1} step="0.1" value={Math.min(position, duration || 1)} disabled={!duration} onChange={event => player.seek(Number(event.target.value))} /><span>{elapsed(duration)}</span></div>
 }
 function Identity() {
-  const track = usePlayer(s => s.track), error = usePlayer(s => s.error)
-  return <div className="now-playing"><Artwork blob={track?.metadata.artwork} title={track?.metadata.title ?? 'No track'} /><div><strong>{track?.metadata.title ?? 'Ready when you are'}</strong><span>{error ?? track?.metadata.artist ?? 'Open a playlist to start listening'}</span></div></div>
+  const track = usePlayer(s => s.track), error = usePlayer(s => s.error), context = usePlayer(s => s.context)
+  return <div className="now-playing"><Artwork blob={track?.metadata.artwork} title={track?.metadata.title ?? 'No track'} /><div><strong>{track?.metadata.title ?? 'Ready when you are'}</strong><span>{error ?? (track ? `${track.metadata.artist || track.filename} · ${context?.kind === 'library' ? 'Library queue' : 'Playlist queue'}` : 'Choose music and press Play')}</span></div></div>
 }
 export function Player() {
   const mobile = useMediaQuery('(max-width: 767px)'), narrow = useMediaQuery('(max-width: 1050px)')

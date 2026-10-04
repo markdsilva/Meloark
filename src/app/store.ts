@@ -10,19 +10,22 @@ import type { LibrarySource } from '../platform/filesystem/types'
 import { PortableSource } from '../platform/filesystem/portable'
 import { equalBytes, hashBytes, UnverifiedWriteError } from '../platform/filesystem/saveProtocol'
 import { loadLibraries, saveLibraries, loadHandle, saveHandle, deleteLibrary } from '../platform/persistence/database'
-import { player } from '../playback/player'
+import { player, usePlayer } from '../playback/player'
 import { scheduleMetadata } from '../metadata/scheduler'
+import { validatePlaylistDeletion } from '../platform/filesystem/deleteProtocol'
 
 export interface Library {
   id: string; name: string; kind: 'direct' | 'portable'; connected: boolean; scanning: boolean; generation: number
   tracks: Record<string, Track>; playlists: string[]; files: string[]; sessions: Record<string, PlaylistSession>; activePlaylist?: string
   scanError?: string
+  hiddenPlaylists?: string[]
 }
 interface AppState {
   libraries: Library[]; activeLibrary?: string; view: 'library' | 'playlist' | 'albums'
   ready: boolean; notice?: string; storageError?: string; busy: boolean
+  visibleTrackIds: string[]
 }
-export const useApp = create<AppState>(() => ({ libraries: [], view: 'library', ready: false, busy: false }))
+export const useApp = create<AppState>(() => ({ libraries: [], view: 'library', ready: false, busy: false, visibleTrackIds: [] }))
 export const sources = new Map<string, LibrarySource>()
 const scanners = new Map<string, AbortController>()
 let persistenceTimer: ReturnType<typeof setTimeout> | undefined
@@ -50,10 +53,39 @@ function updateLibrary(id: string, update: (library: Library) => Library, persis
 }
 function syncPlayer() {
   const library = activeLibrary(), session = activeSession()
-  player.sync(library && session ? `${library.id}/${session.id}` : '', session?.entries ?? [], library?.tracks ?? {}, library?.connected ? sources.get(library.id) : undefined)
+  const context = usePlayer.getState().context
+  if (context?.kind === 'library' && context.libraryId === library?.id) {
+    // Browsing filters are a snapshot, while fresh metadata and missing files reconcile.
+    const entries = library.scanning ? player.queue.entries : player.queue.entries.filter(entry => entry.trackId && library.tracks[entry.trackId])
+    player.configure(context, entries, library.tracks, library.connected ? sources.get(library.id) : undefined)
+  } else {
+    player.configure(library && session ? { kind: 'playlist', libraryId: library.id, sessionId: session.id } : undefined,
+      session?.entries ?? [], library?.tracks ?? {}, library?.connected ? sources.get(library.id) : undefined)
+  }
+}
+export function playLibraryTrack(id: string, orderedIds = useApp.getState().visibleTrackIds) {
+  const library = activeLibrary(), source = library && sources.get(library.id)
+  if (!library?.connected || !source || !library.tracks[id]) { notify('Reconnect the library to play this track.'); return }
+  const ids = [...new Set(orderedIds.includes(id) ? orderedIds : [id, ...orderedIds])].filter(key => library.tracks[key])
+  player.configure({ kind: 'library', libraryId: library.id }, ids.map(trackId => ({ id: trackId, trackId })), library.tracks, source)
+  player.queue.start(id); void player.play(id)
+}
+export function playPlaylistEntry(id: string) {
+  const library = activeLibrary(), session = activeSession(), source = library && sources.get(library.id)
+  if (!library?.connected || !session || !source || !session.entries.some(entry => entry.id === id)) return
+  player.configure({ kind: 'playlist', libraryId: library.id, sessionId: session.id }, session.entries, library.tracks, source)
+  player.queue.start(id); void player.play(id)
+}
+export function togglePlayback() {
+  if (usePlayer.getState().current) { void player.toggle(); return }
+  if (useApp.getState().view === 'playlist') {
+    const first = activeSession()?.entries[0]; if (first) playPlaylistEntry(first.id)
+  } else {
+    const first = useApp.getState().visibleTrackIds[0]; if (first) playLibraryTrack(first)
+  }
 }
 export function selectLibrary(id: string) {
-  useApp.setState({ activeLibrary: id, view: 'library', notice: undefined })
+  useApp.setState({ activeLibrary: id, view: 'library', notice: undefined, visibleTrackIds: [] })
   syncPlayer()
 }
 export function selectView(view: AppState['view']) { useApp.setState({ view }) }
@@ -134,7 +166,7 @@ export async function scanLibrary(id: string) {
           id: trackId, path: file.path, filename: filename(file.path), size: file.size, lastModified: file.lastModified, index: parsed.index,
           metadataStatus: 'pending', metadata: { title: parsed.title, artist: '', album: '' }, support: playbackSupport(file.path) }
       } else if (suffix === 'm3u' || suffix === 'm3u8') playlists.push(file.path)
-      if (files.length % 100 === 0) updateLibrary(id, library => ({ ...library, tracks: { ...tracks }, files: [...files], playlists: [...playlists] }), false)
+      if (files.length % 100 === 0) updateLibrary(id, library => ({ ...library, tracks: { ...old.tracks, ...tracks }, files: [...files], playlists: [...playlists] }), false)
     }
     controller.signal.throwIfAborted()
     const available = new Map(Object.values(tracks).map(track => [track.path, track.id]))
@@ -146,7 +178,8 @@ export async function scanLibrary(id: string) {
       sessions: Object.fromEntries(Object.entries(library.sessions).map(([key, session]) => [key, { ...session, entries: refreshEntries(session.entries), saved: refreshEntries(session.saved) }])) }))
     for (const session of Object.values(old.sessions)) await reconcileSource(id, session.id)
     const current = useApp.getState().libraries.find(l => l.id === id)
-    if (current && !current.activePlaylist && playlists.length === 1) await loadPlaylist(playlists[0], id)
+    const visible = playlists.filter(path => !current?.hiddenPlaylists?.includes(path))
+    if (current && !current.activePlaylist && visible.length === 1) await loadPlaylist(visible[0], id)
     scheduleMetadata(id)
   } catch (error) {
     if (controller.signal.aborted) {
@@ -159,11 +192,12 @@ export async function scanLibrary(id: string) {
 export function cancelScan(id: string) { scanners.get(id)?.abort() }
 export async function loadPlaylist(path: string, libraryId = activeLibrary()?.id, encoding: 'utf-8' | 'windows-1252' = 'utf-8', reload = false) {
   const library = useApp.getState().libraries.find(l => l.id === libraryId), source = libraryId ? sources.get(libraryId) : undefined
-  if (!library || !source) return
-  const known = library.sessions[path] ?? Object.values(library.sessions).find(session => session.document.path === path && session.baseline !== null)
+  if (!library || useApp.getState().busy) return false
+  const known = library.sessions[path] ?? Object.values(library.sessions).find(session => session.document.path === path)
   if (known && !reload) {
-    updateLibrary(library.id, current => ({ ...current, activePlaylist: known.id })); selectView('playlist'); return
+    updateLibrary(library.id, current => ({ ...current, activePlaylist: known.id })); selectView('playlist'); return true
   }
+  if (!source) return false
   try {
     const file = await source.readFile(path)
     if (file.size > MAX_BYTES) throw new Error('Playlist exceeds the 16 MiB inspection limit. The original file is unchanged; rewriting is disabled.')
@@ -171,10 +205,11 @@ export async function loadPlaylist(path: string, libraryId = activeLibrary()?.id
     const document = parsePlaylist(bytes, path, new Map(Object.values(library.tracks).map(track => [track.path, track.id])), encoding)
     const legacy = extension(path) === 'm3u'
     const session: PlaylistSession = { id: path, name: filename(path), document, entries: document.entries, saved: document.entries,
-      baseline: legacy ? null : bytes, undo: [], redo: [], revision: 0, status: legacy ? 'new' : 'saved' }
+      baseline: legacy ? null : bytes, sourcePath: path, undo: [], redo: [], revision: 0, status: legacy ? 'new' : 'saved' }
     if (legacy) { session.document = { ...document, path: path.replace(/\.m3u$/i, '.m3u8'), encoding: 'utf-8', bom: false, newline: '\n' }; session.name = filename(session.document.path) }
     updateLibrary(library.id, current => ({ ...current, sessions: { ...current.sessions, [path]: session }, activePlaylist: path }))
     selectView('playlist')
+    return true
   } catch (error) { notify(message(error)); throw error }
 }
 export function createPlaylist(name = 'My playlist.m3u8', paths?: string[]) {
@@ -193,16 +228,18 @@ export function createPlaylist(name = 'My playlist.m3u8', paths?: string[]) {
 function entryFor(track: Track, target: string): PlaylistEntry { return { id: newId(), raw: relativeReference(track.path, target), path: track.path, trackId: track.id, prelude: [] } }
 export function updateSession(update: (session: PlaylistSession) => PlaylistSession) {
   const library = activeLibrary(), session = activeSession()
-  if (!library || !session || useApp.getState().busy || session.status === 'unverified') return
+  if (!library || !session || useApp.getState().busy || session.status === 'unverified') return false
   updateLibrary(library.id, current => ({ ...current, sessions: { ...current.sessions, [session.id]: update(current.sessions[session.id]) } }))
+  return true
 }
 export function addTracks(ids: string[], play = false) {
   const library = activeLibrary(), session = activeSession()
   if (!library || !session) { notify('Create or open a playlist before adding tracks.'); return }
   try {
     const entries = ids.flatMap(id => library.tracks[id] ? [entryFor(library.tracks[id], session.document.path)] : [])
-    updateSession(current => edit(current, [...current.entries, ...entries], `Add ${entries.length} tracks`))
-    if (play && entries.length) { player.queue.start(entries[0].id); void player.play(entries[0].id) }
+    if (!entries.length || !updateSession(current => edit(current, [...current.entries, ...entries], `Add ${entries.length} tracks`))) return false
+    if (play) playPlaylistEntry(entries[0].id)
+    return true
   } catch (error) { notify(message(error)) }
 }
 export function removeEntries(ids: Set<string>) { updateSession(session => edit(session, session.entries.filter(entry => !ids.has(entry.id)), `Remove ${ids.size} from playlist`)) }
@@ -295,6 +332,62 @@ export async function forgetLibrary(id: string) {
   syncPlayer()
   try { await deleteLibrary(id) } catch { useApp.setState({ storageError: 'Could not remove the remembered library from browser storage.' }) }
   persistSoon()
+}
+export function playlistPaths(library: Library) {
+  return [...new Set([...library.playlists, ...Object.values(library.sessions).map(session => session.document.path)])]
+    .filter(path => !library.hiddenPlaylists?.includes(path)).sort(naturalCompare)
+}
+export function playlistSession(library: Library, path: string) {
+  return Object.values(library.sessions).find(session => session.document.path === path)
+}
+export function removePlaylistFromApp(path: string, deleted = false, libraryId = activeLibrary()?.id) {
+  const library = useApp.getState().libraries.find(item => item.id === libraryId)
+  if (!library || useApp.getState().busy || library.scanning) return
+  const affected = Object.values(library.sessions).filter(session => session.document.path === path)
+  const activeRemoved = affected.some(session => session.id === library.activePlaylist)
+  updateLibrary(library.id, current => ({ ...current,
+    sessions: Object.fromEntries(Object.entries(current.sessions).filter(([, session]) => session.document.path !== path)),
+    activePlaylist: activeRemoved ? undefined : current.activePlaylist,
+    hiddenPlaylists: deleted ? (current.hiddenPlaylists ?? []).filter(item => item !== path) : current.playlists.includes(path) ? [...new Set([...(current.hiddenPlaylists ?? []), path])] : current.hiddenPlaylists,
+    playlists: deleted ? current.playlists.filter(item => item !== path) : current.playlists,
+    files: deleted ? current.files.filter(item => item !== path) : current.files,
+  }))
+  if (activeRemoved && activeLibrary()?.id === library.id) selectView('library')
+}
+export function restorePlaylist(path: string) {
+  const library = activeLibrary()
+  if (!library || useApp.getState().busy) return
+  updateLibrary(library.id, current => ({ ...current, hiddenPlaylists: (current.hiddenPlaylists ?? []).filter(item => item !== path) }))
+}
+export async function inspectPlaylistDeletion(path: string) {
+  validatePlaylistDeletion(path)
+  const library = activeLibrary(), source = library && sources.get(library.id)
+  if (!library?.connected || library.scanning || !source?.deletePlaylist || !library.playlists.includes(path)) throw new Error('Reconnect a direct-access library to delete its selected playlist file.')
+  const file = await source.readFile(path)
+  if (file.size > MAX_BYTES) throw new Error('This playlist exceeds the inspection limit. Use your file manager instead.')
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const session = playlistSession(library, path)
+  if (session?.status === 'unverified') throw new Error('Reconcile this playlist before deleting its file.')
+  if (session?.baseline && !equalBytes(bytes, session.baseline)) throw new Error('The playlist changed outside TrackIndex. Reload or review the source before deleting it.')
+  return bytes
+}
+export async function deletePlaylistFile(path: string, expected: Uint8Array) {
+  const library = activeLibrary(), source = library && sources.get(library.id)
+  if (!library?.connected || !source?.deletePlaylist || useApp.getState().busy || library.scanning || !library.playlists.includes(path)) return false
+  validatePlaylistDeletion(path)
+  useApp.setState({ busy: true })
+  try {
+    if (!await source.requestAccess('write')) throw new Error('Write permission was not granted. The playlist has not been deleted.')
+    const remove = () => source.deletePlaylist!(path, expected)
+    const receipt = navigator.locks ? await navigator.locks.request(`trackindex:${library.id}:${path}`, remove) : await remove()
+    if (receipt.path !== path || !receipt.deleted) throw new Error('Deletion was not verified. Reconcile the library.')
+    // The source adapter verified absence. Cache failure cannot undo that filesystem outcome.
+    useApp.setState({ busy: false })
+    removePlaylistFromApp(path, true, library.id)
+    await persistNow()
+    notify(`Playlist file deleted and verified: ${path}. Music files were not changed.`)
+    return true
+  } finally { useApp.setState({ busy: false }) }
 }
 const metadataPatches = new Map<string, { generation: number; tracks: Map<string, Track['metadata']> }>()
 let metadataTimer: ReturnType<typeof setTimeout> | undefined

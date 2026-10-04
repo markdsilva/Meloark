@@ -63,6 +63,7 @@ export interface PlaylistSession {
   status: 'new' | 'saved' | 'dirty' | 'saving' | 'error' | 'unverified' | 'download'
   error?: string
   expectedAttempt?: string
+  sourcePath?: string
 }
 let idCounter = 0
 export function newId(): string {

@@ -1,12 +1,13 @@
 import { create } from 'zustand'
-import type { Track, PlaylistEntry } from '../domain/models'
+import type { Track } from '../domain/models'
 import type { LibrarySource } from '../platform/filesystem/types'
-import { PlaybackQueue, type Repeat } from './queue'
+import { PlaybackQueue, type Repeat, type QueueContext, type QueueItem } from './queue'
 import { liveBitrate } from '../metadata/liveBitrate'
 
 interface PlayerState {
   current: string | null; track?: Track; playing: boolean; loading: boolean; position: number; duration: number
   volume: number; muted: boolean; shuffle: boolean; repeat: Repeat; error?: string
+  context?: QueueContext
 }
 function preferredVolume() {
   try { const value = Number(localStorage.getItem('trackindex-volume') ?? 0.75); return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0.75 } catch { return 0.75 }
@@ -46,8 +47,10 @@ class PlayerController {
     }
     return audio
   }
-  sync(scope: string, entries: PlaylistEntry[], tracks: Record<string, Track>, source?: LibrarySource) {
+  configure(context: QueueContext | undefined, entries: QueueItem[], tracks: Record<string, Track>, source?: LibrarySource) {
+    const scope = context ? `${context.libraryId}/${context.kind === 'playlist' ? context.sessionId : '@browse'}` : ''
     if (scope !== this.scope) { this.stop(); this.queue.entries = []; this.queue.history = []; this.queue.future = []; this.scope = scope }
+    usePlayer.setState({ context })
     this.tracks = tracks; this.source = source
     const before = this.queue.current
     const current = this.queue.reconcile(entries)
