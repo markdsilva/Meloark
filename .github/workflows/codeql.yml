@@ -10,7 +10,7 @@ on:
 
 jobs:
   analyze:
-    name: Analyze Python
+    name: Analyze TypeScript
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -24,10 +24,10 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
-          languages: python
+          languages: javascript-typescript
           build-mode: none
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4
         with:
-          category: /language:python
+          category: /language:javascript-typescript
