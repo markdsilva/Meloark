@@ -25,7 +25,7 @@ export function scheduleMetadata(libraryId: string) {
       cacheBytes += track.metadata.artwork.size
     }
   }
-  for (const track of Object.values(library.tracks)) if (track.metadataStatus === 'pending' || track.metadataStatus === 'loading') queue({ libraryId, generation: library.generation, trackId: track.id, artwork: false })
+  for (const track of Object.values(library.tracks)) if (track.metadataStatus === 'pending' || track.metadataStatus === 'loading' || track.metadata.technicalVersion !== 1) queue({ libraryId, generation: library.generation, trackId: track.id, artwork: false })
   void drain()
 }
 export function prioritizeMetadata(libraryId: string, ids: string[]) {
@@ -77,7 +77,7 @@ async function drain() {
       try {
         const library = useApp.getState().libraries.find(l => l.id === job.libraryId), source = sources.get(job.libraryId), track = library?.tracks[job.trackId]
         if (!library?.connected || library.generation !== job.generation || !source || !track) continue
-        if (!job.artwork && (track.metadataStatus === 'ready' || checkedArtwork.has(artKey(job)))) continue
+        if (!job.artwork && track.metadata.technicalVersion === 1 && (track.metadataStatus === 'ready' || checkedArtwork.has(artKey(job)))) continue
         let metadata = await parse(await source.readFile(track.path), track.metadata.title, job.artwork)
         if (job.artwork) {
           checkedArtwork.add(artKey(job))
@@ -95,7 +95,7 @@ async function drain() {
             cachedArtwork.set(cacheKey, { libraryId: job.libraryId, trackId: job.trackId, size: metadata.artwork.size })
             cacheBytes += metadata.artwork.size
           }
-        } else metadata.artwork = track.metadata.artwork
+        } else metadata = { ...metadata, artwork: track.metadata.artwork }
         applyMetadata(job.libraryId, job.generation, job.trackId, metadata)
         while (cacheBytes > 64 * 1024 * 1024 && cachedArtwork.size) {
           const [oldKey, old] = cachedArtwork.entries().next().value!

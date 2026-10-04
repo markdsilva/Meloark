@@ -10,6 +10,7 @@ describe('metadata parsing', () => {
     expect(result.duration).toBe(1)
     expect(result.codec).toContain('PCM')
     expect(result.artwork).toBeUndefined()
+    expect(result).toMatchObject({ bitrate: 128000, bitrateKind: 'constant', sampleRate: 8000, bitsPerSample: 16, channels: 1, lossless: true, technicalVersion: 1 })
   })
   it('returns filename fallbacks for malformed metadata', async () => {
     const file = new NodeFile(['invalid'], 'bad.mp3', { type: 'audio/mpeg' }) as unknown as File

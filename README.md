@@ -36,6 +36,20 @@ Keyboard shortcuts: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redo, Ctrl/C
 
 The persistent player supports play/pause, previous/next, seeking, volume/mute, shuffle, and repeat off/all/one. Playback follows the active draft. Switching playlists stops playback; reordering preserves the current occurrence. Removing the playing occurrence advances to its surviving successor.
 
+Collapse the desktop sidebar into an icon rail; its preference survives reopening. Below 768 px, navigation opens in a modal drawer. On phones, expand the compact player for the complete transport, volume, and audio details. Player sheets do not replace the native audio element or restart playback. Use **Select tracks** for touch selection, then drag a handle after holding it briefly, or use Move up/down. Track actions offer explicit Add and Add & Play.
+
+## Audio details and live source bitrate
+
+Click the Audio column or the player's audio summary for container, codec/profile, reported bitrate, sample rate, source bit depth where known, channels, compression, file size, and library-relative location. Older metadata caches upgrade progressively; artwork and playlist drafts are preserved. Reported codec profiles are hints, including MP3 CBR profiles inferred by tag parsers.
+
+Live analysis uses local encoded-packet sizes and timing in a separate, lazy worker while the current track is playing and the readout is visible. It uses a roughly one-second window, updates at most four times per second, retains compact packet information, and limits its source-read cache to 8 MiB. Pausing, hiding the page, changing tracks, or seeking stops or resets pending work. A five-second watchdog disables failed analysis without interrupting playback. Some distant seeks require container indexing and may show an unavailable reason.
+
+MP3, FLAC, AAC/ADTS, M4A/M4B and supported Ogg audio use packet analysis; validated WAV/AIFF PCM uses constant source bitrate. Explicit MP3 Info tags can establish nominal CBR; matching initial frames cannot. Encrypted, malformed, unsupported variants retain static details. Verified audio average appears only after continuous packet coverage reaches the end, or immediately for validated PCM. Values exclude container/tag overhead and never represent output-device quality or network bitrate.
+
+Ogg FLAC mapping 1.x uses a small local reader because the pinned demuxer supports Ogg Vorbis/Opus but lacks Ogg FLAC. It validates page checksums, packet continuation, FLAC header timing, sequence and granule positions, keeps one 256 KiB read cache, one source page and a bounded timing window, and uses at most 128 sparse seek checkpoints. Chained/multiplexed Ogg FLAC falls back to static details with a visible reason. The reader follows [Xiph's mapping](https://xiph.org/flac/ogg_mapping.html) and [RFC 9639 frame headers](https://www.rfc-editor.org/rfc/rfc9639.html#name-frame-header).
+
+The capabilities panel distinguishes API support, actual storage/handle outcomes, observed folder-access failures, and current-library permissions. Permission queries do not prompt; grants remain explicit actions. Where the audio element does not accept volume changes, use device volume controls.
+
 ## Browser modes
 
 | Capability | Direct folder access | Portable selection |
@@ -97,12 +111,26 @@ Direct save tests inject a directory-handle adapter backed by isolated temporary
 
 Playwright WebKit on Windows lacks native audio decoding; its playback test is skipped there. WebKit browser tests are Safari-engine checks, not a substitute for testing real Safari on macOS.
 
+An optional read-only local-library acceptance test scans metadata, plays available FLAC/MP3/M4A samples, checks live analysis, creates/exports a reviewed draft, restores it through actual folder reselection, and verifies unchanged filenames, sizes and modification times. No application or CI configuration depends on a personal folder:
+
+```powershell
+$env:TRACKINDEX_LOCAL_LIBRARY = 'C:\path\to\test-library'
+npm.cmd run test:e2e -- --project=chromium tests/e2e/local-library.spec.ts
+```
+
+Browser tests start an isolated server on port 5174, overrideable with `TRACKINDEX_TEST_PORT`. Run them outside restrictive command sandboxes when Firefox fails before page creation; no Firefox security preferences need changing. Generated PCM and structural encoded-packet fixtures cover CI. Structural packet fixtures test demuxing and timing, not codec decoding. Live worker tests cover cancellation, stale responses, hidden/paused behavior, and watchdog failure. Browser checks cover 320/390/768/1024/1440 px, landscape, a 200%-zoom-equivalent viewport, and Chromium touch events.
+
 ## Manual release checks
 
 - Windows, macOS, Linux Chromium: choose a real temporary library, reopen a remembered handle, deny/renew permission, save new/existing playlists, revoke access, and check actual disk bytes.
 - macOS Safari and desktop Firefox: select a nested folder, reload/reselect it, export a playlist, and place it back at its stated relative location.
 - Verify real MP3, FLAC, Ogg/Opus, M4A/AAC, and WAV support on each target OS. Confirm decode failures are skipped without loops.
 - Exercise embedded and folder artwork, large tags, worker failure, inaccessible files, private browsing, cleared storage, and quota failures.
-- Check keyboard-only navigation, screen-reader announcements, reduced motion, 900/1280/1920px desktop layouts, and dragging near scroll boundaries.
+- Check keyboard-only navigation, screen-reader announcements, reduced motion, 200% browser zoom, and dragging near scroll boundaries.
+- Use actual Android Chrome and iPhone Safari to verify picker behavior, native playback, system-controlled volume, software-keyboard dialogs, safe areas, and touch dragging. Desktop emulation does not establish these device capabilities.
 
 CI runs lint, unit/integration tests, a production build, and browser tests. Native picker/permission and real macOS/Linux checks remain manual before release.
+
+## Dependency notice
+
+Local packet inspection uses [Mediabunny](https://mediabunny.dev/api/PacketRetrievalOptions), distributed under [MPL-2.0](https://github.com/Vanilagy/mediabunny/blob/main/LICENSE). Its unmodified source is available in the pinned npm package and [upstream repository](https://github.com/Vanilagy/mediabunny). Only local-file input demuxers are enabled; TrackIndex uses no remote source, media decoder, or encoder for analysis.

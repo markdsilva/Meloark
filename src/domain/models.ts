@@ -6,6 +6,15 @@ export interface TrackMetadata {
   album: string
   duration?: number
   codec?: string
+  container?: string
+  codecProfile?: string
+  bitrate?: number
+  bitrateKind?: 'reported' | 'constant' | 'average'
+  sampleRate?: number
+  bitsPerSample?: number
+  channels?: number
+  lossless?: boolean
+  technicalVersion?: number
   artwork?: Blob
   error?: string
 }

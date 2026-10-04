@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Track, PlaylistEntry } from '../domain/models'
 import type { LibrarySource } from '../platform/filesystem/types'
 import { PlaybackQueue, type Repeat } from './queue'
+import { liveBitrate } from '../metadata/liveBitrate'
 
 interface PlayerState {
   current: string | null; track?: Track; playing: boolean; loading: boolean; position: number; duration: number
@@ -24,10 +25,11 @@ class PlayerController {
     const audio = new Audio()
     audio.preload = 'metadata'
     audio.volume = usePlayer.getState().volume
-    audio.addEventListener('timeupdate', () => usePlayer.setState({ position: audio.currentTime }))
+    audio.addEventListener('timeupdate', () => { usePlayer.setState({ position: audio.currentTime }); liveBitrate.observe(audio.currentTime, !audio.paused) })
+    audio.addEventListener('seeking', () => liveBitrate.seek(audio.currentTime))
     audio.addEventListener('durationchange', () => usePlayer.setState({ duration: Number.isFinite(audio.duration) ? audio.duration : 0 }))
-    audio.addEventListener('play', () => usePlayer.setState({ playing: true }))
-    audio.addEventListener('pause', () => usePlayer.setState({ playing: false }))
+    audio.addEventListener('play', () => { usePlayer.setState({ playing: true }); liveBitrate.observe(audio.currentTime, true) })
+    audio.addEventListener('pause', () => { usePlayer.setState({ playing: false }); liveBitrate.observe(audio.currentTime, false) })
     audio.addEventListener('ended', () => this.next(true))
     audio.addEventListener('error', () => {
       if (this.queue.current) this.queue.unavailable.add(this.queue.current)
@@ -74,6 +76,7 @@ class PlayerController {
     const token = ++this.generation
     const audio = this.element()
     audio.pause()
+    liveBitrate.register()
     usePlayer.setState({ current: id, track, loading: true, position: 0, duration: 0, error: undefined })
     try {
       const file = await this.source.readFile(track.path)
@@ -81,6 +84,7 @@ class PlayerController {
       if (this.url) URL.revokeObjectURL(this.url)
       this.url = URL.createObjectURL(file)
       audio.src = this.url
+      liveBitrate.register(file, `${this.scope}/${track.path}/${file.size}/${file.lastModified}`)
       audio.load()
       this.mediaMetadata(track)
       if (autoplay) {
@@ -132,6 +136,7 @@ class PlayerController {
   repeat() { const modes: Repeat[] = ['off', 'all', 'one']; this.queue.repeat = modes[(modes.indexOf(this.queue.repeat) + 1) % 3]; usePlayer.setState({ repeat: this.queue.repeat }) }
   stop(error?: string) {
     ++this.generation
+    liveBitrate.register()
     this.audio?.pause()
     this.audio?.removeAttribute('src')
     this.queue.current = null

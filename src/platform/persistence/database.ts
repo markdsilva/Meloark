@@ -1,6 +1,7 @@
 import { openDB, type DBSchema } from 'idb'
 import type { Library } from '../../app/store'
 import type { DirectoryHandle } from '../filesystem/types'
+import { storageOutcome, handleOutcome } from '../capabilities/status'
 
 interface TrackIndexDB extends DBSchema {
   libraries: { key: string; value: Library }
@@ -8,10 +9,11 @@ interface TrackIndexDB extends DBSchema {
 }
 const database = () => openDB<TrackIndexDB>('trackindex-web', 1, {
   upgrade(db) { db.createObjectStore('libraries', { keyPath: 'id' }); db.createObjectStore('handles') },
-})
+}).catch(error => { storageOutcome(error); throw error })
 export async function loadLibraries(): Promise<Library[]> {
   const db = await database()
-  try { return await db.getAll('libraries') } finally { db.close() }
+  try { const libraries = await db.getAll('libraries'); storageOutcome(); return libraries }
+  catch (error) { storageOutcome(error); throw error } finally { db.close() }
 }
 export async function saveLibraries(libraries: Library[]) {
   const db = await database()
@@ -23,15 +25,18 @@ export async function saveLibraries(libraries: Library[]) {
         sessions: Object.fromEntries(Object.entries(library.sessions).map(([id, session]) => [id, { ...session, undo: [], redo: [] }])) })
     }
     await transaction.done
-  } finally { db.close() }
+    storageOutcome()
+  } catch (error) { storageOutcome(error); throw error } finally { db.close() }
 }
 export async function saveHandle(id: string, handle: DirectoryHandle) {
   const db = await database()
-  try { await db.put('handles', handle, id) } finally { db.close() }
+  try { await db.put('handles', handle, id); handleOutcome() }
+  catch (error) { handleOutcome(error); throw error } finally { db.close() }
 }
 export async function loadHandle(id: string) {
   const db = await database()
-  try { return await db.get('handles', id) } finally { db.close() }
+  try { const handle = await db.get('handles', id); if (handle) handleOutcome(); return handle }
+  catch (error) { handleOutcome(error); throw error } finally { db.close() }
 }
 export async function deleteLibrary(id: string) {
   const db = await database()

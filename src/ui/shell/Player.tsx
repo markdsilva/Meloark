@@ -1,28 +1,57 @@
-import { Pause, Play, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX, LoaderCircle } from 'lucide-react'
+﻿import { useState } from 'react'
+import { Pause, Play, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX, LoaderCircle, ChevronUp, MoreHorizontal } from 'lucide-react'
 import { usePlayer, player } from '../../playback/player'
 import { useApp } from '../../app/store'
 import { Artwork } from '../shared/Artwork'
 import { elapsed } from '../shared/format'
+import { AudioDetails, AudioFacts, LiveReadout } from '../shared/AudioDetails'
+import { audioSummary } from '../../metadata/technical'
+import { useMediaQuery } from '../shared/useMediaQuery'
+import { Dialog } from '../shared/Dialog'
+import { detectCapabilities } from '../../platform/capabilities/detect'
+
+function Volume() {
+  const volume = usePlayer(s => s.volume), muted = usePlayer(s => s.muted)
+  const [capabilities] = useState(detectCapabilities)
+  return <div className="volume"><button className={`icon-button toggle-button ${muted ? 'active' : ''}`} aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={muted} title={muted ? 'Unmute' : 'Mute'} onClick={() => player.mute()}>{muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+    {capabilities.volumeControl ? <input aria-label="Volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={event => player.setVolume(Number(event.target.value))} /> : <small>Use your device’s volume controls</small>}</div>
+}
+function Toggles() {
+  const shuffle = usePlayer(s => s.shuffle), repeat = usePlayer(s => s.repeat)
+  return <><button className={`icon-button toggle-button ${shuffle ? 'active' : ''}`} aria-label="Shuffle" aria-pressed={shuffle} title={`Shuffle ${shuffle ? 'on' : 'off'}`} onClick={() => player.shuffle()}><Shuffle size={17} /></button>
+    <button className={`icon-button toggle-button ${repeat !== 'off' ? 'active' : ''}`} aria-label={`Repeat: ${repeat}`} aria-pressed={repeat !== 'off'} title={`Repeat ${repeat}`} onClick={() => player.repeat()}>{repeat === 'one' ? <Repeat1 size={17} /> : <Repeat size={17} />}</button></>
+}
+function Transport({ previous = true }: { previous?: boolean }) {
+  const current = usePlayer(s => s.current), playing = usePlayer(s => s.playing), loading = usePlayer(s => s.loading)
+  const available = useApp(s => { const l = s.libraries.find(l => l.id === s.activeLibrary); return !!(l?.connected && l.activePlaylist && l.sessions[l.activePlaylist]?.entries.length) })
+  return <>{previous && <button className="icon-button" aria-label="Previous track" disabled={!current} onClick={() => player.previous()}><SkipBack size={20} fill="currentColor" /></button>}
+    <button className="play-button" aria-label={playing ? 'Pause' : 'Play'} disabled={!available} onClick={() => { void player.toggle() }}>{loading ? <LoaderCircle className="spin" size={21} /> : playing ? <Pause size={21} fill="currentColor" /> : <Play size={21} fill="currentColor" />}</button>
+    <button className="icon-button" aria-label="Next track" disabled={!current} onClick={() => player.next()}><SkipForward size={20} fill="currentColor" /></button></>
+}
+function Seek({ compact = false }: { compact?: boolean }) {
+  const position = usePlayer(s => s.position), duration = usePlayer(s => s.duration)
+  return <div className={`seek ${compact ? 'compact-seek' : ''}`}><span>{elapsed(position)}</span><input aria-label="Seek" type="range" min="0" max={duration || 1} step="0.1" value={Math.min(position, duration || 1)} disabled={!duration} onChange={event => player.seek(Number(event.target.value))} /><span>{elapsed(duration)}</span></div>
+}
+function Identity() {
+  const track = usePlayer(s => s.track), error = usePlayer(s => s.error)
+  return <div className="now-playing"><Artwork blob={track?.metadata.artwork} title={track?.metadata.title ?? 'No track'} /><div><strong>{track?.metadata.title ?? 'Ready when you are'}</strong><span>{error ?? track?.metadata.artist ?? 'Open a playlist to start listening'}</span></div></div>
+}
 export function Player() {
-  const state = usePlayer()
-  const queueAvailable = useApp(s => {
-    const library = s.libraries.find(l => l.id === s.activeLibrary)
-    return !!(library?.connected && library.activePlaylist && library.sessions[library.activePlaylist]?.entries.length)
-  })
-  return <footer className="player" aria-label="Music player">
-    <div className="now-playing"><Artwork blob={state.track?.metadata.artwork} title={state.track?.metadata.title ?? 'No track'} />
-      <div><strong>{state.track?.metadata.title ?? 'Ready when you are'}</strong><span>{state.error ?? state.track?.metadata.artist ?? 'Open a playlist to start listening'}</span></div>
-    </div>
-    <div className="transport">
-      <div className="transport-buttons">
-        <button className={`icon-button ${state.shuffle ? 'active' : ''}`} aria-label="Shuffle" aria-pressed={state.shuffle} onClick={() => player.shuffle()}><Shuffle size={17} /></button>
-        <button className="icon-button" aria-label="Previous track" disabled={!state.current} onClick={() => player.previous()}><SkipBack size={19} fill="currentColor" /></button>
-        <button className="play-button" aria-label={state.playing ? 'Pause' : 'Play'} disabled={!queueAvailable} onClick={() => { void player.toggle() }}>{state.loading ? <LoaderCircle className="spin" size={20} /> : state.playing ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}</button>
-        <button className="icon-button" aria-label="Next track" disabled={!state.current} onClick={() => player.next()}><SkipForward size={19} fill="currentColor" /></button>
-        <button className={`icon-button ${state.repeat !== 'off' ? 'active' : ''}`} aria-label={`Repeat: ${state.repeat}`} onClick={() => player.repeat()}>{state.repeat === 'one' ? <Repeat1 size={17} /> : <Repeat size={17} />}</button>
-      </div>
-      <div className="seek"><span>{elapsed(state.position)}</span><input aria-label="Seek" type="range" min="0" max={state.duration || 1} step="0.1" value={Math.min(state.position, state.duration || 1)} disabled={!state.duration} onChange={event => player.seek(Number(event.target.value))} /><span>{elapsed(state.duration)}</span></div>
-    </div>
-    <div className="volume"><span className="local-badge">LOCAL AUDIO</span><button className="icon-button" aria-label={state.muted ? 'Unmute' : 'Mute'} onClick={() => player.mute()}>{state.muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button><input aria-label="Volume" type="range" min="0" max="1" step="0.01" value={state.volume} onChange={event => player.setVolume(Number(event.target.value))} /></div>
+  const mobile = useMediaQuery('(max-width: 767px)'), narrow = useMediaQuery('(max-width: 1050px)')
+  const track = usePlayer(s => s.track)
+  const [expanded, setExpanded] = useState(false), [more, setMore] = useState(false), [details, setDetails] = useState(false)
+  const [audioExpanded, setAudioExpanded] = useState(true)
+  return <footer className={`player ${mobile ? 'player-mobile' : ''}`} aria-label="Music player">
+    <div className="player-identity"><Identity />{!mobile && track && <button className="player-audio" aria-label="Audio details" onClick={() => setDetails(true)}><span>{audioSummary(track)}</span><LiveReadout track={track} /></button>}</div>
+    <div className="transport"><div className="transport-buttons">
+      {mobile ? <><Transport previous={false} /><button className="icon-button" aria-label="Expand player" aria-expanded={expanded} onClick={() => setExpanded(true)}><ChevronUp size={20} /></button></> : <><Transport />{!narrow && <><Toggles /><Volume /></>}{narrow && <button className="icon-button" aria-label="More player controls" aria-expanded={more} onClick={() => setMore(true)}><MoreHorizontal size={21} /></button>}</>}
+    </div>{!mobile && <Seek />}</div>
+    {mobile && <Seek compact />}
+    {expanded && mobile && <Dialog title="Now playing" className="now-playing-sheet" close={() => setExpanded(false)}>
+      <Artwork blob={track?.metadata.artwork} title={track?.metadata.title ?? 'No track'} large /><Identity /><Seek /><div className="sheet-controls"><Transport /><Toggles /></div><Volume />
+      {track && <details className="sheet-audio" open={audioExpanded} onToggle={event => setAudioExpanded(event.currentTarget.open)}><summary>Audio details</summary>{audioExpanded && <AudioFacts track={track} />}</details>}
+    </Dialog>}
+    {more && !mobile && <Dialog title="Player controls" close={() => setMore(false)}><div className="sheet-controls"><Toggles /><Volume /></div>{track && <AudioFacts track={track} />}</Dialog>}
+    {details && !mobile && track && <AudioDetails track={track} close={() => setDetails(false)} />}
   </footer>
 }

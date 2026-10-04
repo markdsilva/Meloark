@@ -85,7 +85,7 @@ test('10,000 tracks use a bounded DOM and retain selection across search', async
 
 test('portable playlist preserves duplicates, supports history, exports, and recovers a draft', async ({ page }) => {
   const unexpectedRequests: string[] = []
-  page.on('request', request => { if (!request.url().startsWith('http://127.0.0.1:5173') && !request.url().startsWith('blob:')) unexpectedRequests.push(request.url()) })
+  page.on('request', request => { if (!request.url().startsWith(test.info().project.use.baseURL!) && !request.url().startsWith('blob:')) unexpectedRequests.push(request.url()) })
   await page.goto('/')
   await page.getByLabel('Select library files', { exact: true }).setInputFiles([
     audio('001 - First.wav'), audio('002 - Second.wav'),

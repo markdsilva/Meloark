@@ -5,6 +5,7 @@ import { edit, moveEntries, travel } from '../domain/history'
 import { emptyDocument, parsePlaylist, serializePlaylist, normalizedDocument, MAX_BYTES } from '../playlists/codec'
 import { normalizeRelative, relativeReference } from '../playlists/paths'
 import { playbackSupport } from '../platform/capabilities/detect'
+import { usePlatformStatus } from '../platform/capabilities/status'
 import type { LibrarySource } from '../platform/filesystem/types'
 import { PortableSource } from '../platform/filesystem/portable'
 import { equalBytes, hashBytes, UnverifiedWriteError } from '../platform/filesystem/saveProtocol'
@@ -96,6 +97,7 @@ export async function openPortable(files: File[], reconnectId?: string) {
 export async function openDirectory(reconnectId?: string) {
   try {
     const handle = await window.showDirectoryPicker!({ mode: 'read' })
+    usePlatformStatus.setState({ pickerReason: undefined })
     const { DirectSource } = await import('../platform/filesystem/direct')
     let id = reconnectId ?? newId()
     if (!reconnectId) {
@@ -105,7 +107,7 @@ export async function openDirectory(reconnectId?: string) {
     }
     await addSource(new DirectSource(handle), id)
     try { await saveHandle(id, handle) } catch { useApp.setState({ storageError: 'The folder opened, but its handle could not be remembered. Reselect it next time.' }) }
-  } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) notify(message(error)) }
+  } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) { usePlatformStatus.setState({ pickerReason: message(error) }); notify(message(error)) } }
 }
 export async function reconnect(id: string) {
   const source = sources.get(id)

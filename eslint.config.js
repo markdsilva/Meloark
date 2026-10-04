@@ -4,7 +4,7 @@ import globals from 'globals'
 import hooks from 'eslint-plugin-react-hooks'
 
 export default tseslint.config(
-  { ignores: ['archive/**', 'node_modules/**', 'dist/**', 'playwright-report/**', 'test-results/**'] },
+  { ignores: ['archive/**', 'node_modules/**', 'dist/**', '.cache/**', 'playwright-report/**', 'test-results/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   { files: ['**/*.{ts,tsx}'], languageOptions: { globals: { ...globals.browser, ...globals.node } },

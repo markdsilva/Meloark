@@ -9,16 +9,20 @@ export interface Capabilities {
   worker: boolean
   mediaSession: boolean
   locks: boolean
+  volumeControl: boolean
 }
 export function detectCapabilities(): Capabilities {
   const input = document.createElement('input')
   const filePrototype = globalThis.FileSystemFileHandle?.prototype
   const indexedDB = typeof globalThis.indexedDB !== 'undefined'
   const directoryPicker = typeof window.showDirectoryPicker === 'function' && window.isSecureContext
+  const audio = document.createElement('audio')
+  let volumeControl = false
+  try { audio.volume = 0.4; volumeControl = Math.abs(audio.volume - 0.4) < 0.01 } catch { /* System-controlled volume. */ }
   return { secure: window.isSecureContext, directoryPicker, filePicker: typeof window.showOpenFilePicker === 'function',
     directoryInput: 'webkitdirectory' in input, userFileWriting: directoryPicker && !!filePrototype?.createWritable,
     indexedDB, handlePersistence: directoryPicker && indexedDB, worker: typeof Worker !== 'undefined',
-    mediaSession: 'mediaSession' in navigator, locks: 'locks' in navigator }
+    mediaSession: 'mediaSession' in navigator, locks: 'locks' in navigator, volumeControl }
 }
 export function playbackSupport(path: string): 'likely' | 'unknown' | 'unsupported' {
   const types: Record<string, string> = { mp3: 'audio/mpeg', wav: 'audio/wav', flac: 'audio/flac', ogg: 'audio/ogg', opus: 'audio/ogg; codecs="opus"', m4a: 'audio/mp4', m4b: 'audio/mp4', aac: 'audio/aac', aif: 'audio/aiff', aiff: 'audio/aiff', wma: 'audio/x-ms-wma' }

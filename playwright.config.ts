@@ -1,10 +1,15 @@
 import { defineConfig, devices } from '@playwright/test'
 
+// Keep test fixtures independent of an IDE dev server and its HMR module instances.
+const port = Number(process.env.TRACKINDEX_TEST_PORT ?? 5174)
+const url = `http://127.0.0.1:${port}`
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
-  use: { baseURL: 'http://127.0.0.1:5173', trace: 'retain-on-failure' },
-  webServer: { command: 'npm run dev -- --port 5173', url: 'http://127.0.0.1:5173', reuseExistingServer: !process.env.CI },
+  workers: 3,
+  use: { baseURL: url, trace: 'retain-on-failure' },
+  webServer: { command: `npm run dev -- --port ${port} --strictPort`, url, reuseExistingServer: false },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
