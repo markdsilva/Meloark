@@ -9,6 +9,7 @@ import { prioritizeMetadata } from '../../metadata/scheduler'
 import { Artwork } from '../shared/Artwork'
 import { durationLabel } from '../shared/format'
 import { CapabilityDialog } from '../onboarding/Capabilities'
+import { BrowserSuggestion } from '../onboarding/BrowserSuggestion'
 import { CreatePlaylist } from '../playlist/CreatePlaylist'
 import { AlbumCards, TrackList } from '../playlist/TrackList'
 import { Player } from './Player'
@@ -148,6 +149,7 @@ export function App() {
     </main>
     {lyricsOpen && <Suspense fallback={null}><LyricsPanel /></Suspense>}
     <Player />
+    <BrowserSuggestion capabilities={capabilities} paused={help || create || sidebar || picker || lyricsOpen} details={() => setHelp(true)} />
     <Guide />
     <Tooltips />
     {help && <CapabilityDialog capabilities={capabilities} close={() => setHelp(false)} tour={() => { setHelp(false); startGuide() }} />}

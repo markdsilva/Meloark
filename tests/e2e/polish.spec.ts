@@ -74,6 +74,7 @@ test('sidebar geometry, restrained lyrics and responsive targets remain accessib
   expect(a.width).toBe(24); expect(a.height).toBe(24); expect(b.width).toBe(24); expect(b.y).toBe(a.y)
   await close.hover(); await expect(close).toHaveCSS('background-color', 'rgb(28, 28, 28)'); await expect(close).toHaveCSS('color', 'rgb(243, 240, 234)')
   await more.hover(); await expect(more).toHaveCSS('background-color', 'rgb(28, 28, 28)'); await expect(more).toHaveCSS('color', 'rgb(243, 240, 234)')
+  await sidebar.screenshot({ path: `test-results/sidebar-menu-hover-${info.project.name}.png` })
   const toggle = page.getByRole('contentinfo').getByRole('button', { name: 'Lyrics', exact: true })
   const toggleBox = (await toggle.boundingBox())!
   expect(1440 - toggleBox.x - toggleBox.width).toBe(36)

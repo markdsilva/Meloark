@@ -100,6 +100,9 @@ test('workspace and capability cards fit narrow, landscape, and zoom-equivalent 
     const mobile = width < 768
     if (mobile) await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click()
     await (mobile ? page.getByRole('dialog', { name: 'Navigation', exact: true }) : page.getByRole('main')).getByRole('button', { name: 'Browser capabilities', exact: true }).click()
+    await expect(page.getByText('Save playlists', { exact: true })).toBeVisible()
+    expect(await page.getByRole('dialog').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
+    await page.getByRole('dialog').locator('summary').click()
     await expect(page.getByText('Playlist export', { exact: true })).toBeVisible()
     expect(await page.getByRole('dialog').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
     await page.getByRole('button', { name: 'Got it', exact: true }).click()

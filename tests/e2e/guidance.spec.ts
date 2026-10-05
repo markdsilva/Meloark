@@ -110,6 +110,7 @@ test('sort menu, touch actions, compact controls and reduced motion remain usabl
   }
   await page.emulateMedia({ reducedMotion: 'reduce' })
   expect(await page.locator('.app').evaluate(element => getComputedStyle(element).transitionDuration)).toBe('0s')
+  await page.mouse.move(0, 0)
   await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).focus()
   await expect(page.getByRole('tooltip')).toContainText('Collapse sidebar')
   await page.screenshot({ path: 'test-results/polished-desktop.png' })

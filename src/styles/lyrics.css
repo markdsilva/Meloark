@@ -19,15 +19,16 @@
 .lyrics-identity strong { font-size: 13px; font-weight: 650; }
 .lyrics-identity > div > span { color: var(--muted); font-size: 11px; margin-top: 3px; }
 .lyrics-reading { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-.lyrics-scroll { position: relative; height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scroll-padding-block: 30%; }
+.lyrics-reading, .lyrics-plain { background: radial-gradient(ellipse at 0% 48%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%); }
+.lyrics-scroll { position: relative; height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--border) transparent; scroll-padding-block: 30%; }
 .lyrics-lines { padding: min(24dvh, 160px) 22px min(36dvh, 240px); }
 .lyric-line { position: relative; display: block; text-align: left; width: 100%; color: var(--muted); font-size: 24px; font-weight: 700; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px 6px; border-radius: var(--radius); transition: color var(--motion), background var(--motion), text-shadow var(--motion); }
-.lyric-line::before { content: ''; position: absolute; left: -5px; top: calc(50% - 10px); width: 2px; height: 20px; border-radius: 2px; background: var(--accent); opacity: 0; transition: opacity var(--motion); }
+.lyric-line::before { content: ''; position: absolute; left: -5px; top: calc(50% - 10px); width: 2px; height: 20px; border-radius: 2px; background: linear-gradient(transparent, var(--accent-text) 30%, var(--accent) 70%, transparent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 30%, transparent); opacity: 0; transition: opacity var(--motion); }
 .lyric-line.past { color: var(--subtle); }
-.lyric-line.current { color: var(--accent-text); background: transparent; text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 18%, transparent); }
+.lyric-line.current { color: var(--accent-text); background: transparent; text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 22%, transparent), 0 0 32px color-mix(in srgb, var(--accent) 10%, transparent); }
 .lyric-line.current::before { opacity: 1; }
-.lyric-line:hover { color: var(--text); background: color-mix(in srgb, var(--hover) 40%, transparent); }
-.lyric-line.current:hover { color: var(--accent-text); background: transparent; }
+.lyric-line:hover { color: var(--text); background: color-mix(in srgb, var(--hover) 28%, transparent); }
+.lyric-line.current:hover { color: var(--accent-text); background: transparent; text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 32px color-mix(in srgb, var(--accent) 14%, transparent); }
 .lyric-break { font-size: 18px; letter-spacing: 8px; color: var(--accent-text); }
 .lyrics-follow { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); box-shadow: var(--shadow); white-space: nowrap; }
 .lyrics-empty { flex: 1; min-height: 0; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: safe center; text-align: center; }

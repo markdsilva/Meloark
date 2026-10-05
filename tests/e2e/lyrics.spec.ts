@@ -119,8 +119,12 @@ test('lyrics fit narrow, landscape and zoom-equivalent layouts and retain keyboa
     await page.setViewportSize({ width, height })
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
     await expect(panel(page)).toBeVisible()
-    const bounds = await panel(page).boundingBox()
-    expect(bounds!.x).toBeGreaterThanOrEqual(0); expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width)
+    // Crossing the dock/drawer breakpoint remounts the panel. Wait for the
+    // replacement to be measured rather than reading the outgoing element.
+    await expect.poll(async () => {
+      const bounds = await panel(page).boundingBox()
+      return !!bounds && bounds.x >= 0 && bounds.x + bounds.width <= width
+    }).toBe(true)
     await expect(panel(page).getByRole('button', { name: 'Lyrics options', exact: true })).toBeVisible()
     await openOptions(page); await page.getByRole('menuitem', { name: 'Import LRC', exact: true }).press('Escape')
     await expect(panel(page).getByRole('button', { name: 'Lyrics options', exact: true })).toBeFocused()
