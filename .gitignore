@@ -388,3 +388,9 @@ venv/
 *.tsbuildinfo
 .env.local
 /.cache/
+/.wrangler/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+!.env.example

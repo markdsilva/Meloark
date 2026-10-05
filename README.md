@@ -23,6 +23,45 @@ npm run preview
 
 The production output is `dist/`. Serve it from any static HTTPS host. Core library management happens locally; the static host only serves application assets. An offline-installable PWA is not included.
 
+## Cloudflare Workers Static Assets deployment
+
+`wrangler.jsonc` deploys only Vite's `dist/` assets. There is no Worker entry point, backend, Cloudflare storage binding, or Vite Cloudflare plugin. Wrangler is pinned as a development dependency. `.nvmrc` selects Node 24 (24.11 or newer); npm 10 or newer can install the version-3 lockfile.
+
+Connect this repository through **Cloudflare Workers Builds**, using these settings:
+
+| Setting | Value |
+| --- | --- |
+| Worker name | `trackindex-web` (must match `wrangler.jsonc`) |
+| Production branch | `main` |
+| Root directory | Repository root (`/` in the dashboard, `.` locally) |
+| Build command | `npm ci && npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Static output | `dist/`, already configured in Wrangler |
+| Build/runtime environment variables | None required; `.nvmrc` supplies Node 24 |
+
+Workers Builds supplies deployment authentication through its GitHub integration; do not add Cloudflare tokens or account IDs to the repository. Keep development dependencies available when installing: Vite, TypeScript and Wrangler are build tools. Cloudflare runs its build separately from GitHub checks, so protect `main` with the existing Web checks and CodeQL workflows before merging.
+
+After connecting and deploying, add **`trackindex.markdsilva.com` as a Custom Domain** on the `trackindex-web` Worker in Cloudflare. Domain/route management is intentionally left in the dashboard; the configuration contains no route or DNS changes. See [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/) and [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
+
+The application navigates with local UI state rather than path-based routes. SPA fallback serves the app shell for direct navigation/reloads on nested URLs; it does not select a library or playlist from a URL. Vite's default `/` base is correct for this dedicated hostname, including scripts, lazy modules, workers, icons, manifest and the local font. `public/_headers` adds MIME-sniffing protection, no-referrer behavior and framing protection without limiting native media, filesystem access, IndexedDB or opt-in LRCLIB requests. Cloudflare's default revalidation caching is retained; there is no service worker or offline cache to invalidate.
+
+HTTPS enables the secure context required for direct folder access and Web Locks in supporting browsers. Permissions still require explicit user actions. IndexedDB, selected handles and preferences belong to the **origin**: localhost, preview URLs and `https://trackindex.markdsilva.com` have separate browser state. Export any unsaved local drafts before changing origins, then select/reconnect libraries on production. No application environment variables, API proxy or lyric-service credentials are needed.
+
+Verify deployment locally without publishing:
+
+```sh
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run test:e2e
+npm run build
+npx wrangler deploy --dry-run
+npx wrangler dev --ip 127.0.0.1 --port 8787
+```
+
+The dry run validates the assets-only deployment without uploading a version or changing domains. The local Wrangler server serves the actual production output, including `_headers` and SPA fallback. On Windows PowerShell, use `npm.cmd` and `npx.cmd` as needed. Native pickers, retained permissions, real Safari/mobile audio and the final Custom Domain certificate still require a manual check after deployment.
+
 ## Using the application
 
 1. Choose a music folder. Its subfolders are scanned recursively. Portable folder and multiple-file selection are available when direct access is unavailable.
