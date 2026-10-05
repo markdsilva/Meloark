@@ -379,7 +379,7 @@ export async function inspectPlaylistDeletion(path: string) {
   const bytes = new Uint8Array(await file.arrayBuffer())
   const session = playlistSession(library, path)
   if (session?.status === 'unverified') throw new Error('Reconcile this playlist before deleting its file.')
-  if (session?.baseline && !equalBytes(bytes, session.baseline)) throw new Error('The playlist changed outside TrackIndex. Reload or review the source before deleting it.')
+  if (session?.baseline && !equalBytes(bytes, session.baseline)) throw new Error('The playlist changed outside Meloark. Reload or review the source before deleting it.')
   return bytes
 }
 export async function deletePlaylistFile(path: string, expected: Uint8Array) {

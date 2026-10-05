@@ -12,7 +12,7 @@ beforeEach(() => {
 describe('workspace shell', () => {
   it('offers portable selection and privacy information without gating the app', async () => {
     render(<App />)
-    expect(screen.getByRole('heading', { name: /A little order/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Your music.*At home/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Choose a music folder' })).toBeEnabled()
     expect(screen.getByText('No uploads. No account. Just your library.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Play$/ })).toBeDisabled()

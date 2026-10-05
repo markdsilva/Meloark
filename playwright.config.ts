@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 // Keep test fixtures independent of an IDE dev server and its HMR module instances.
-const port = Number(process.env.TRACKINDEX_TEST_PORT ?? 5174)
+const port = Number(process.env.MELOARK_TEST_PORT ?? 5174)
 const url = `http://127.0.0.1:${port}`
 
 export default defineConfig({

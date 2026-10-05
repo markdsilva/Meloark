@@ -134,7 +134,7 @@ test('static details and visible live PCM analysis do not interrupt native playb
 
 test('empty and reviewed multi-folder creation reject duplicate names and recover after reselection', async ({ page }) => {
   await page.addInitScript(() => { window.showDirectoryPicker = undefined })
-  const root = await mkdtemp(join(tmpdir(), 'trackindex-review-'))
+  const root = await mkdtemp(join(tmpdir(), 'meloark-review-'))
   try {
     for (const folder of ['One', 'Two']) { await mkdir(join(root, folder)); await writeFile(join(root, folder, '001 - Song.wav'), wavSample()); await writeFile(join(root, folder, 'Unindexed.wav'), wavSample()) }
     await page.goto('/'); await page.getByLabel('Select library folder', { exact: true }).setInputFiles(root)

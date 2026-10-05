@@ -5,7 +5,7 @@ import { join, resolve, sep } from 'node:path'
 import { wavSample } from '../fixtures/audio'
 
 async function connectFixture(page: Page) {
-  const directory = await mkdtemp(join(tmpdir(), 'trackindex-test-'))
+  const directory = await mkdtemp(join(tmpdir(), 'meloark-test-'))
   const audio = Buffer.from(wavSample())
   await writeFile(join(directory, 'A.wav'), audio)
   await writeFile(join(directory, 'B.wav'), audio)
@@ -56,7 +56,7 @@ async function connectFixture(page: Page) {
   await expect(page.getByRole('heading', { name: 'Local', exact: true })).toBeVisible()
   return { directory, audio, writes, cleanup: async () => {
     const target = resolve(directory), base = resolve(tmpdir()) + sep
-    if (!target.startsWith(base) || !target.slice(base.length).startsWith('trackindex-test-')) throw new Error('Unsafe fixture cleanup target')
+    if (!target.startsWith(base) || !target.slice(base.length).startsWith('meloark-test-')) throw new Error('Unsafe fixture cleanup target')
     await rm(target, { recursive: true, force: true })
   } }
 }
@@ -85,7 +85,7 @@ test('external edits cause a conflict without overwriting the source', async ({ 
     const external = '#EXTM3U\nA.wav\nA.wav\n'
     await writeFile(join(fixture.directory, 'Local.m3u8'), external)
     await page.getByRole('button', { name: 'Save playlist', exact: true }).click()
-    await expect(page.getByRole('alert')).toContainText('changed outside TrackIndex')
+    await expect(page.getByRole('alert')).toContainText('changed outside Meloark')
     expect(fixture.writes).toHaveLength(0)
     expect((await readFile(join(fixture.directory, 'Local.m3u8'))).toString()).toBe(external)
   } finally { await fixture.cleanup() }

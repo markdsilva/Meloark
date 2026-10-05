@@ -1,17 +1,21 @@
 <p align="center">
-  <img src="public/favicon.svg" alt="TrackIndex amber music mark" width="72" height="72" />
+  <img src="public/favicon.svg" alt="Meloark amber music mark" width="72" height="72" />
 </p>
 
-<h1 align="center">TrackIndex Web</h1>
+<h1 align="center">Meloark</h1>
 
-<p align="center"><strong>Your music. Your order.</strong><br />A home for your local music and playlists, right in your browser.</p>
+<p align="center"><strong>A home for your music.</strong><br />A local-first music player and library, right in your browser.</p>
 
 <p align="center">
-  <strong><a href="https://trackindex.markdsilva.com/">Open TrackIndex →</a></strong><br />
+  <strong><a href="https://github.com/markdsilva/Meloark">Meloark on GitHub →</a></strong><br />
   No installation · No account · No music uploads
 </p>
 
 ---
+
+Meloark combines **melody** and **ark** — a home for your music collection. Play your own local audio, browse albums and metadata, build playlists, and follow lyrics without uploading your music.
+
+The repository is being prepared for a fresh Cloudflare Worker named `meloark`. A public app URL will be added after deployment; no new hostname is assumed here.
 
 ## Your collection, on your terms
 
@@ -23,7 +27,7 @@ Your audio stays on your device. Playlist edits never rename or delete your musi
 
 ## Get started in a minute
 
-1. **[Visit TrackIndex](https://trackindex.markdsilva.com/).** Start the optional tour, or skip it and explore.
+1. **Open Meloark.** [Run it locally](#run-locally), or open your deployed instance. Start the optional tour, or skip it and explore.
 2. **Add your music.** Choose **Choose a music folder** and select your local collection. Subfolders are included. You can also select files, and play tracks straight away—no playlist needed.
 3. **Create a playlist.** Click **New playlist**, give it a name, keep **Start empty** selected, and choose **Create draft**. Already have an M3U/M3U8? Open it from the sidebar instead.
 4. **Make it yours.** In **All tracks**, use **+** to add songs. Switch to **Playlist** to drag tracks into order; **Undo** is there if you change your mind.
@@ -31,11 +35,11 @@ Your audio stays on your device. Playlist edits never rename or delete your musi
 
 > **Browser tip:** Desktop Chrome or Edge offers the fullest experience, including permission-based folder access and playlist write-back. Firefox and Safari can still browse, play supported audio, edit, and export. Portable selections need to be reselected after a reload.
 
-Want lyrics? Open **Lyrics** in the player. TrackIndex reads local `.lrc` files first; online lookup is your choice. Need help later? The header's **Help / browser capabilities** button can restart the tour.
+Want lyrics? Open **Lyrics** in the player. Meloark reads local `.lrc` files first; online lookup is your choice. Need help later? The header's **Help / browser capabilities** button can restart the tour.
 
 ## Explore further
 
-The app is ready to use at **[trackindex.markdsilva.com](https://trackindex.markdsilva.com/)**. Expand only what you need below.
+Expand the sections below for browser behavior, lyrics, playlist safety, development, and deployment details.
 
 <details>
 <summary><strong>More ways to listen, edit & use lyrics</strong></summary>
@@ -63,7 +67,7 @@ Collapse the desktop sidebar into an icon rail; its preference survives reopenin
 
 Use **Lyrics** in the player to open a right-side panel on desktop or a full-screen sheet on phones. Synchronized lines follow the native playback clock; click a line to seek. Scrolling pauses following so you can read ahead; **Follow lyrics** resumes it. Reduced motion uses immediate scrolling. Opening lyrics never replaces the audio element or changes your playlist.
 
-TrackIndex looks for a UTF-8 `.lrc` beside the audio file first (`Song.lrc` or `Song.mp3.lrc`). Multiple candidates or tracks sharing a filename stem require your choice. You can also import an LRC through the panel's options. Plain lyrics are readable without invented timing, and instrumental recordings are labelled.
+Meloark looks for a UTF-8 `.lrc` beside the audio file first (`Song.lrc` or `Song.mp3.lrc`). Multiple candidates or tracks sharing a filename stem require your choice. You can also import an LRC through the panel's options. Plain lyrics are readable without invented timing, and instrumental recordings are labelled.
 
 Online lyrics are optional. **Allow online lyrics** permits requests to [LRCLIB](https://lrclib.net/); **Use local lyrics only** keeps lookup offline. Change this choice in Lyrics options. Only the current track is queried while the panel is open and the page is visible. Automatic lookup requires a confirmed title tag rather than a filename fallback. Matching checks title, artist, album when present, and duration within two seconds. **Find another version** lets you review alternatives rather than silently choosing a different recording.
 
@@ -93,7 +97,7 @@ The app requires an explicit selection and never discovers your system Music fol
 - UTF-8 M3U8, optional BOM, LF/CRLF/CR, duplicate occurrences, comments, and EXTINF are supported.
 - Legacy M3U uses UTF-8 first; invalid UTF-8 offers explicit Windows-1252 decoding with a preview. Saving creates a separate UTF-8 M3U8.
 - Paths are relative to the playlist directory. Safe parent references inside the chosen library are allowed. Absolute paths, remote URLs, missing tracks, separator ambiguity, and case-only mismatches require explicit local mapping or removal.
-- Existing M3U8 preserves BOM and newline style. New documents use UTF-8 without BOM and LF. Downloaded files must be placed at the location shown by TrackIndex, otherwise relative references will not resolve.
+- Existing M3U8 preserves BOM and newline style. New documents use UTF-8 without BOM and LF. Downloaded files must be placed at the location shown by Meloark, otherwise relative references will not resolve.
 - HLS manifests are rejected. Unknown extended directives require a reviewed normalized copy; the original is preserved. Inspection limits are 16 MiB and 100,000 lines.
 - Numbered filenames such as `001 - Song.mp3` provide a reviewed starting order. Indexes are folder-local. Duplicate indexes, partial indexing, invalid indexes, gaps, and multiple folders are displayed for review. Creating a draft from filename order requires an explicit review acknowledgement. Files are never renumbered.
 
@@ -109,8 +113,8 @@ Once established, playlist order is authoritative. Filename indexing never becom
 Use Node.js 24 (24.11 or newer) and npm. Dependencies are pinned in the lockfile.
 
 ```sh
-git clone https://github.com/markdsilva/TrackIndexWeb.git
-cd TrackIndexWeb
+git clone https://github.com/markdsilva/Meloark.git
+cd Meloark
 npm ci
 npm run dev
 ```
@@ -145,11 +149,11 @@ Playwright WebKit on Windows lacks native audio decoding; its playback test is s
 An optional read-only local-library acceptance test scans metadata, plays available FLAC/MP3/M4A samples, checks live analysis and imported LRC seeking, creates/exports a reviewed draft, restores it through actual folder reselection, and verifies unchanged filenames, sizes and modification times. No application or CI configuration depends on a personal folder:
 
 ```powershell
-$env:TRACKINDEX_LOCAL_LIBRARY = 'C:\path\to\test-library'
+$env:MELOARK_LOCAL_LIBRARY = 'C:\path\to\test-library'
 npm.cmd run test:e2e -- --project=chromium tests/e2e/local-library.spec.ts
 ```
 
-Browser tests start an isolated server on port 5174, overrideable with `TRACKINDEX_TEST_PORT`. Run them outside restrictive command sandboxes when Firefox fails before page creation; no Firefox security preferences need changing. Generated PCM and structural encoded-packet fixtures cover CI. Structural packet fixtures test demuxing and timing, not codec decoding. Live worker tests cover cancellation, stale responses, hidden/paused behavior, and watchdog failure. Browser checks cover 320/390/768/1024/1440 px, landscape, a 200%-zoom-equivalent viewport, and Chromium touch events.
+Browser tests start an isolated server on port 5174, overrideable with `MELOARK_TEST_PORT`. Run them outside restrictive command sandboxes when Firefox fails before page creation; no Firefox security preferences need changing. Generated PCM and structural encoded-packet fixtures cover CI. Structural packet fixtures test demuxing and timing, not codec decoding. Live worker tests cover cancellation, stale responses, hidden/paused behavior, and watchdog failure. Browser checks cover 320/390/768/1024/1440 px, landscape, a 200%-zoom-equivalent viewport, and Chromium touch events.
 
 ### Manual release checks
 
@@ -171,27 +175,28 @@ The first-use workflow review and proposed simplification backlog are in [docs/u
 
 ### Cloudflare Workers Static Assets deployment
 
-`wrangler.jsonc` deploys only Vite's `dist/` assets. There is no Worker entry point, backend, Cloudflare storage binding, or Vite Cloudflare plugin. Wrangler is pinned as a development dependency. `.nvmrc` selects Node 24 (24.11 or newer); npm 10 or newer can install the version-3 lockfile.
+`wrangler.jsonc` deploys only Vite's `dist/` assets. There is no Worker entry point, backend, Cloudflare storage binding, or Vite Cloudflare plugin. Wrangler is pinned as a development dependency. `.nvmrc` selects Node 24, and `package.json` requires 24.11 or newer within that major version; npm 10 or newer can install the version-3 lockfile.
 
-Fork the repository for your own instance, then connect your fork through **Cloudflare Workers Builds**, using these settings:
+For the new deployment, create a Worker named **`meloark`** and connect **[markdsilva/Meloark](https://github.com/markdsilva/Meloark)** through **Cloudflare Workers Builds**. For a personal fork, connect that repository instead. Use these settings:
 
 | Setting | Value |
 | --- | --- |
-| Worker name | `trackindex-web` (must match `wrangler.jsonc`) |
+| Worker name | `meloark` (must match `wrangler.jsonc`) |
 | Production branch | `main` |
 | Root directory | Repository root (`/` in the dashboard, `.` locally) |
-| Build command | `npm ci && npm run build` |
+| Dependency installation | `npm ci` (keep development dependencies) |
+| Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy` |
 | Static output | `dist/`, already configured in Wrangler |
 | Build/runtime environment variables | None required; `.nvmrc` supplies Node 24 |
 
 Workers Builds supplies deployment authentication through its GitHub integration; do not add Cloudflare tokens or account IDs to the repository. Keep development dependencies available when installing: Vite, TypeScript and Wrangler are build tools. Cloudflare runs its build separately from GitHub checks, so protect `main` with the existing Web checks and CodeQL workflows before merging.
 
-After connecting and deploying, add **your own hostname as a Custom Domain** on the `trackindex-web` Worker in Cloudflare. Domain/route management is intentionally left in the dashboard; the configuration contains no route or DNS changes. See [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/) and [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
+When you are ready, deploy the fresh Worker, then add **your own hostname as a Custom Domain** on the `meloark` Worker in Cloudflare. Domain/route management is intentionally left in the dashboard; the configuration contains no route or DNS changes. See [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/) and [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
 
-The application navigates with local UI state rather than path-based routes. SPA fallback serves the app shell for direct navigation/reloads on nested URLs; it does not select a library or playlist from a URL. Vite's default `/` base is correct for this dedicated hostname, including scripts, lazy modules, workers, icons, manifest and the local font. `public/_headers` adds MIME-sniffing protection, no-referrer behavior and framing protection without limiting native media, filesystem access, IndexedDB or opt-in LRCLIB requests. Cloudflare's default revalidation caching is retained; there is no service worker or offline cache to invalidate.
+The application navigates with local UI state rather than path-based routes. SPA fallback serves the app shell for direct navigation/reloads on nested URLs; it does not select a library or playlist from a URL. Vite's default `/` base is correct for this dedicated hostname, including scripts, lazy modules, workers, icons, manifest and the local font. `public/_headers` adds MIME-sniffing protection, no-referrer behavior and framing protection without limiting native media, filesystem access, IndexedDB or opt-in LRCLIB requests. Static Assets routing follows [Cloudflare's SPA conventions](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/). Cloudflare's default revalidation caching is retained; there is no service worker or offline cache to invalidate.
 
-HTTPS enables the secure context required for direct folder access and Web Locks in supporting browsers. Permissions still require explicit user actions. IndexedDB, selected handles and preferences belong to the **origin**: localhost, preview URLs and `https://trackindex.markdsilva.com` have separate browser state. Export any unsaved local drafts before changing origins, then select/reconnect libraries on production. No application environment variables, API proxy or lyric-service credentials are needed.
+HTTPS enables the secure context required for direct folder access and Web Locks in supporting browsers. Permissions still require explicit user actions. IndexedDB, selected handles and preferences belong to the **origin**: localhost, preview URLs and each production hostname have separate browser state. Export any unsaved local drafts before changing origins, then select/reconnect libraries on production. No application environment variables, API proxy or lyric-service credentials are needed.
 
 Verify deployment locally without publishing:
 
@@ -231,6 +236,8 @@ The capabilities panel distinguishes API support, actual storage/handle outcomes
 
 IndexedDB stores registrations, supported folder handles, inventories, metadata/thumbnails, source baselines, drafts, and small pending-save records. Music bytes and portable File objects are never persisted. History is session-scoped and resets on reload; drafts survive where browser storage is available. Volume is a lightweight local preference.
 
+The rename deliberately preserves the IndexedDB database `trackindex-web` (schema version 2), its library/handle/lyrics stores, and the localStorage keys `trackindex-sidebar`, `trackindex-volume`, `trackindex-guide-v1`, `trackindex-browser-tip-v1`, and `trackindex-lyrics-online-v1`. The `trackindex:` Web Lock prefix is also retained so already-open tabs coordinate playlist saves/deletions. These are internal compatibility identifiers, never current product branding. On the same origin, existing libraries, handles, drafts, metadata, artwork, lyrics and preferences remain compatible without a migration. Browser storage cannot transfer automatically to a different hostname; save/export drafts before moving and reselect your music on the new origin.
+
 Saving is explicit. The saved baseline advances only after read-back verification. Permission, stale-source, write, close, and verification failures preserve the draft. An uncertain save freezes further edits to that draft until **Reconcile** checks the actual file. Verified filesystem success remains success if a subsequent browser-cache update fails; that cache failure is shown separately.
 
 There is no cross-resource transaction or automatic rollback. Creating a target may leave an empty playlist on failure. A failed or canceled download cannot be verified, so the UI reports **Download requested**, not saved. External applications can change a file during the narrow validation/write or validation/delete interval; browser APIs do not provide atomic compare-and-swap. Same-library application tabs use Web Locks for saving and deletion when available. Unverified deletion preserves browser state until the confirmation dialog's **Reconcile deletion** checks the file; verified deletion remains committed if browser-cache storage subsequently fails. Targets exceeding the 16 MiB inspection limit must be deleted through the file manager.
@@ -252,12 +259,12 @@ Use Refresh to discover external changes; automatic filesystem watching is not i
 
 ### Dependency notice
 
-The interface bundles unmodified [Inter Variable 4.1](https://github.com/rsms/inter/releases/tag/v4.1) locally under the [SIL Open Font License 1.1](public/fonts/OFL.txt). Font loading uses a system-font fallback and never contacts a font CDN. The SVG favicon and generated desktop/mobile icons derive from the existing amber TrackIndex music/list mark; the icon manifest does not add an installation flow or service worker.
+The interface bundles unmodified [Inter Variable 4.1](https://github.com/rsms/inter/releases/tag/v4.1) locally under the [SIL Open Font License 1.1](public/fonts/OFL.txt). Font loading uses a system-font fallback and never contacts a font CDN. The SVG favicon and desktop/mobile icons retain the brand-neutral amber music/list mark; the icon manifest does not add an installation flow or service worker.
 
-Local packet inspection uses [Mediabunny](https://mediabunny.dev/api/PacketRetrievalOptions), distributed under [MPL-2.0](https://github.com/Vanilagy/mediabunny/blob/main/LICENSE). Its unmodified source is available in the pinned npm package and [upstream repository](https://github.com/Vanilagy/mediabunny). Only local-file input demuxers are enabled; TrackIndex uses no remote source, media decoder, or encoder for analysis.
+Local packet inspection uses [Mediabunny](https://mediabunny.dev/api/PacketRetrievalOptions), distributed under [MPL-2.0](https://github.com/Vanilagy/mediabunny/blob/main/LICENSE). Its unmodified source is available in the pinned npm package and [upstream repository](https://github.com/Vanilagy/mediabunny). Only local-file input demuxers are enabled; Meloark uses no remote source, media decoder, or encoder for analysis.
 
 </details>
 
 ---
 
-[Source code](https://github.com/markdsilva/TrackIndexWeb) · [Report an issue](https://github.com/markdsilva/TrackIndexWeb/issues) · [License](LICENSE)
+[Source code](https://github.com/markdsilva/Meloark) · [Report an issue](https://github.com/markdsilva/Meloark/issues) · [License](LICENSE)

@@ -28,7 +28,7 @@ async function request(path: string, params: Record<string, string>, signal: Abo
   try {
     const url = new URL(`${API}/${path}`)
     Object.entries(params).forEach(([key, value]) => { if (value) url.searchParams.set(key, value) })
-    const response = await fetch(url, { signal: controller.signal, credentials: 'omit', referrerPolicy: 'no-referrer', headers: { 'Lrclib-Client': 'TrackIndexWeb/1.0' } })
+    const response = await fetch(url, { signal: controller.signal, credentials: 'omit', referrerPolicy: 'no-referrer', headers: { 'Lrclib-Client': 'Meloark/1.0' } })
     if (response.status === 404) return null
     if (response.status === 429 || response.status === 503) {
       const header = response.headers.get('Retry-After'), seconds = Number(header)

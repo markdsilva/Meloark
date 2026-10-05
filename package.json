@@ -1,5 +1,13 @@
 {
-  "name": "trackindex-web",
+  "name": "meloark",
+  "description": "A local-first music player and library for your own music, right in the browser.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/markdsilva/Meloark.git"
+  },
+  "bugs": {
+    "url": "https://github.com/markdsilva/Meloark/issues"
+  },
   "private": true,
   "version": "0.1.0",
   "type": "module",

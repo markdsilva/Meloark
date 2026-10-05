@@ -13,7 +13,7 @@ export async function verifiedDelete(path: string, expected: Uint8Array, target:
   if (expected.length > MAX_BYTES) throw new Error('This playlist exceeds the inspection limit. Use your file manager instead.')
   const current = await target.read()
   if (current === null) throw new ConflictError('The playlist is already missing. Reconcile the library before removing it from the app.')
-  if (!equalBytes(current, expected)) throw new ConflictError('The playlist changed outside TrackIndex. Review it again; it was not deleted.')
+  if (!equalBytes(current, expected)) throw new ConflictError('The playlist changed outside Meloark. Review it again; it was not deleted.')
   try {
     await target.remove()
     if (await target.read() !== null) throw new Error('The playlist still exists.')

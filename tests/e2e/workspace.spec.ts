@@ -4,7 +4,7 @@ const audio = (name: string) => ({ name, mimeType: 'audio/wav', buffer: Buffer.f
 
 test('first visit offers capabilities and preserves portable access', async ({ page }, info) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: /A little order/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /Your music.*At home/ })).toBeVisible()
   if (info.project.name === 'chromium') await page.screenshot({ path: 'test-results/welcome.png', fullPage: true })
   await page.getByRole('button', { name: 'See capabilities' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()

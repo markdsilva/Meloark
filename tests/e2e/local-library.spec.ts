@@ -3,7 +3,7 @@ import { readdir, stat } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 
 // Opt-in, read-only acceptance test. CI uses generated fixtures instead.
-const directory = process.env.TRACKINDEX_LOCAL_LIBRARY
+const directory = process.env.MELOARK_LOCAL_LIBRARY
 async function inventory(root: string, folder = root): Promise<{ path: string; size: number; modified: number }[]> {
   const entries = await readdir(folder, { withFileTypes: true }), result = []
   for (const entry of entries) {
@@ -14,7 +14,7 @@ async function inventory(root: string, folder = root): Promise<{ path: string; s
   return result.sort((a, b) => a.path.localeCompare(b.path))
 }
 test('optional local-library scan, metadata, playback, review, export, and recovery', async ({ page }, info) => {
-  test.skip(!directory || info.project.name !== 'chromium', 'Set TRACKINDEX_LOCAL_LIBRARY to run this read-only Chromium acceptance test.')
+  test.skip(!directory || info.project.name !== 'chromium', 'Set MELOARK_LOCAL_LIBRARY to run this read-only Chromium acceptance test.')
   test.setTimeout(120000)
   const before = await inventory(directory!)
   const audioCount = before.filter(file => /\.(flac|mp3|m4a|m4b|aac|ogg|opus|wav|aiff?|wma)$/i.test(file.path)).length

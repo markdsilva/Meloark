@@ -18,7 +18,7 @@ test('browser tip is optional, limited to a first non-Chromium visit, and rememb
   await tip.getByRole('button', { name: 'Dismiss browser tip', exact: true }).click()
   await expect(tip).toHaveCount(0)
   await page.reload()
-  await expect(page.getByRole('heading', { name: /A little order/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /Your music.*At home/ })).toBeVisible()
   await expect(tip).toHaveCount(0)
 })
 

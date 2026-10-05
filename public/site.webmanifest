@@ -1,6 +1,7 @@
 {
-  "name": "TrackIndex",
-  "short_name": "TrackIndex",
+  "name": "Meloark",
+  "short_name": "Meloark",
+  "description": "A local-first music player and library for your own music, right in the browser.",
   "display": "browser",
   "theme_color": "#151515",
   "background_color": "#151515",

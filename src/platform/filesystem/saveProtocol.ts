@@ -17,7 +17,7 @@ export async function hashBytes(bytes: Uint8Array): Promise<string> {
 }
 export async function verifiedWrite(path: string, bytes: Uint8Array, expected: Uint8Array | null, target: SaveTarget): Promise<WriteReceipt> {
   if (normalizeRelative(path) !== path || !path.toLowerCase().endsWith('.m3u8')) throw new Error('Only library-relative M3U8 targets may be written.')
-  if (!equalBytes(await target.read(), expected)) throw new ConflictError('The playlist changed outside TrackIndex. Reload it or export a copy; the file was not overwritten.')
+  if (!equalBytes(await target.read(), expected)) throw new ConflictError('The playlist changed outside Meloark. Reload it or export a copy; the file was not overwritten.')
   const stream = await target.open()
   let closeStarted = false
   try {

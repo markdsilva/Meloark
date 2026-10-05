@@ -67,5 +67,5 @@ export function Guide() {
 export function GuideInvitation() {
   const { active, seen } = useGuide(), ready = useApp(s => s.ready)
   if (active || seen || !ready) return null
-  return <div className="guide-invitation" role="region" aria-label="Getting started"><Compass size={20} /><div><strong>New to TrackIndex?</strong><p>A short guide shows you how to listen and make a playlist.</p></div><button className="button secondary" onClick={startGuide}>Start tour</button><button className="text-button" onClick={() => finish('skipped')}>Skip</button></div>
+  return <div className="guide-invitation" role="region" aria-label="Getting started"><Compass size={20} /><div><strong>New to Meloark?</strong><p>A short guide shows you how to listen and make a playlist.</p></div><button className="button secondary" onClick={startGuide}>Start tour</button><button className="text-button" onClick={() => finish('skipped')}>Skip</button></div>
 }

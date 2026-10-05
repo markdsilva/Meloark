@@ -4,12 +4,13 @@ import type { DirectoryHandle } from '../filesystem/types'
 import { storageOutcome, handleOutcome } from '../capabilities/status'
 import type { LyricsRecord } from '../../lyrics/types'
 
-interface TrackIndexDB extends DBSchema {
+interface MeloarkDB extends DBSchema {
   libraries: { key: string; value: Library }
   handles: { key: string; value: DirectoryHandle }
   lyrics: { key: string; value: LyricsRecord; indexes: { libraryId: string } }
 }
-const database = () => openDB<TrackIndexDB>('trackindex-web', 2, {
+// Keep the legacy database name so existing libraries, handles, drafts and lyrics survive the rename.
+const database = () => openDB<MeloarkDB>('trackindex-web', 2, {
   upgrade(db, oldVersion) {
     if (oldVersion < 1) { db.createObjectStore('libraries', { keyPath: 'id' }); db.createObjectStore('handles') }
     if (oldVersion < 2) db.createObjectStore('lyrics', { keyPath: 'trackId' }).createIndex('libraryId', 'libraryId')

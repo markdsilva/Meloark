@@ -361,16 +361,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-/TrackIndex/dist
-/TrackIndex/build
 /build
 /release
-/TrackIndex/tests
-/TrackIndex/tools
-/TrackIndex/native/libmpv/*.dll
-/TrackIndex/vendor
 *.spec
-TrackIndex/version.txt
 *.ps1
 *.cmd
 .venv/
