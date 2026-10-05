@@ -156,4 +156,6 @@ The first-use workflow review and proposed simplification backlog are in [docs/u
 
 ## Dependency notice
 
+The interface bundles unmodified [Inter Variable 4.1](https://github.com/rsms/inter/releases/tag/v4.1) locally under the [SIL Open Font License 1.1](public/fonts/OFL.txt). Font loading uses a system-font fallback and never contacts a font CDN. The SVG favicon and generated desktop/mobile icons derive from the existing amber TrackIndex music/list mark; the icon manifest does not add an installation flow or service worker.
+
 Local packet inspection uses [Mediabunny](https://mediabunny.dev/api/PacketRetrievalOptions), distributed under [MPL-2.0](https://github.com/Vanilagy/mediabunny/blob/main/LICENSE). Its unmodified source is available in the pinned npm package and [upstream repository](https://github.com/Vanilagy/mediabunny). Only local-file input demuxers are enabled; TrackIndex uses no remote source, media decoder, or encoder for analysis.

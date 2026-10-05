@@ -16,7 +16,7 @@ function Volume() {
   const volume = usePlayer(s => s.volume), muted = usePlayer(s => s.muted)
   const [capabilities] = useState(detectCapabilities)
   return <div className="volume"><button className={`icon-button toggle-button ${muted ? 'active' : ''}`} aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={muted} title={muted ? 'Unmute' : 'Mute'} onClick={() => player.mute()}>{muted ? <VolumeX size={20} /> : <Volume2 size={20} />}</button>
-    {capabilities.volumeControl ? <input className="volume-range" style={{ '--range-fill': `${volume * 100}%` } as CSSProperties} aria-label="Volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={event => player.setVolume(Number(event.target.value))} /> : <small>Use your device’s volume controls</small>}</div>
+    {capabilities.volumeControl ? <input className="player-range volume-range" style={{ '--range-fill': `${volume * 100}%` } as CSSProperties} aria-label="Volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={event => player.setVolume(Number(event.target.value))} /> : <small>Use your device’s volume controls</small>}</div>
 }
 export function Toggles() {
   const shuffle = usePlayer(s => s.shuffle), repeat = usePlayer(s => s.repeat)
@@ -32,7 +32,8 @@ export function Transport({ previous = true }: { previous?: boolean }) {
 }
 export function Seek({ compact = false }: { compact?: boolean }) {
   const position = usePlayer(s => s.position), duration = usePlayer(s => s.duration)
-  return <div className={`seek ${compact ? 'compact-seek' : ''}`}><span>{elapsed(position)}</span><input aria-label="Seek" type="range" min="0" max={duration || 1} step="0.1" value={Math.min(position, duration || 1)} disabled={!duration} onChange={event => player.seek(Number(event.target.value))} /><span>{elapsed(duration)}</span></div>
+  const fill = duration > 0 ? Math.max(0, Math.min(100, position / duration * 100)) : 0
+  return <div className={`seek ${compact ? 'compact-seek' : ''}`}><span>{elapsed(position)}</span><input className="player-range" style={{ '--range-fill': `${fill}%` } as CSSProperties} aria-label="Seek" type="range" min="0" max={duration || 1} step="0.1" value={Math.min(position, duration || 1)} disabled={!duration} onChange={event => player.seek(Number(event.target.value))} /><span>{elapsed(duration)}</span></div>
 }
 function Identity() {
   const track = usePlayer(s => s.track), error = usePlayer(s => s.error), context = usePlayer(s => s.context)
@@ -44,7 +45,7 @@ export function Player() {
   const [expanded, setExpanded] = useState(false), [more, setMore] = useState(false), [details, setDetails] = useState(false)
   const [audioExpanded, setAudioExpanded] = useState(true)
   const lyricsOpen = useLyrics(s => s.open)
-  const lyricsButton = <button className={`icon-button ghost-button toggle-button lyrics-toggle ${lyricsOpen ? 'active' : ''}`} aria-label="Lyrics" aria-pressed={lyricsOpen} aria-expanded={lyricsOpen} aria-controls="lyrics-panel" data-tooltip="Show synchronized lyrics" onClick={() => { setExpanded(false); setMore(false); toggleLyrics() }}><MessageSquareText size={20} /></button>
+  const lyricsButton = <button className={`icon-button ghost-button toggle-button lyrics-toggle ${lyricsOpen ? 'active' : ''}`} aria-label="Lyrics" aria-pressed={lyricsOpen} aria-expanded={lyricsOpen} aria-controls="lyrics-panel" data-tooltip="Show synchronized lyrics" onClick={() => { setExpanded(false); setMore(false); toggleLyrics() }}><MessageSquareText size={18} strokeWidth={1.75} /></button>
   return <footer className={`player ${mobile ? 'player-mobile' : ''}`} aria-label="Music player">
     <div className="player-identity"><Identity />{!mobile && track && <button className="player-audio" aria-label="Audio details" onClick={() => setDetails(true)}><span>{audioSummary(track)}</span><LiveReadout track={track} /></button>}</div>
     <div className="transport"><div className="transport-buttons">

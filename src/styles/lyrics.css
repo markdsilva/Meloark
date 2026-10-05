@@ -2,7 +2,10 @@
 .field-error p { margin-bottom: 4px; }
 .field-error .text-button { padding-left: 0; }
 .player::after { display: none; }
-.player-secondary { display: flex; justify-content: flex-end; min-width: 0; }
+.player-secondary { display: flex; justify-content: flex-end; min-width: 0; padding-right: 12px; }
+.lyrics-toggle.active:not(:disabled) { color: var(--accent-text); background: transparent; }
+.lyrics-toggle:hover:not(:disabled), .lyrics-toggle.active:hover:not(:disabled) { color: var(--accent-text); background: var(--surface); }
+.lyrics-toggle:active:not(:disabled), .lyrics-toggle.active:active:not(:disabled) { background: var(--hover); }
 .main { container-type: inline-size; }
 .lyrics-panel, .lyrics-panel-content { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .lyrics-panel { grid-column: 3; grid-row: 1; background: var(--sidebar); border-left: 1px solid var(--border); overflow: hidden; animation: lyrics-enter 180ms ease; }
@@ -18,11 +21,13 @@
 .lyrics-reading { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .lyrics-scroll { position: relative; height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scroll-padding-block: 30%; }
 .lyrics-lines { padding: min(24dvh, 160px) 22px min(36dvh, 240px); }
-.lyric-line { display: block; text-align: left; width: 100%; color: var(--muted); font-size: 24px; font-weight: 700; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px 6px; border-radius: var(--radius); transition: color 200ms ease, background 180ms ease; }
+.lyric-line { position: relative; display: block; text-align: left; width: 100%; color: var(--muted); font-size: 24px; font-weight: 700; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px 6px; border-radius: var(--radius); transition: color var(--motion), background var(--motion), text-shadow var(--motion); }
+.lyric-line::before { content: ''; position: absolute; left: -5px; top: calc(50% - 10px); width: 2px; height: 20px; border-radius: 2px; background: var(--accent); opacity: 0; transition: opacity var(--motion); }
 .lyric-line.past { color: var(--subtle); }
-.lyric-line.current { color: var(--text); background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); }
-.lyric-line:hover { color: var(--text); background: var(--hover); }
-.lyric-line.current:hover { background: var(--control-on-hover); }
+.lyric-line.current { color: var(--accent-text); background: transparent; text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 18%, transparent); }
+.lyric-line.current::before { opacity: 1; }
+.lyric-line:hover { color: var(--text); background: color-mix(in srgb, var(--hover) 40%, transparent); }
+.lyric-line.current:hover { color: var(--accent-text); background: transparent; }
 .lyric-break { font-size: 18px; letter-spacing: 8px; color: var(--accent-text); }
 .lyrics-follow { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); box-shadow: var(--shadow); white-space: nowrap; }
 .lyrics-empty { flex: 1; min-height: 0; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: safe center; text-align: center; }
