@@ -54,6 +54,20 @@ Ogg FLAC mapping 1.x uses a small local reader because the pinned demuxer suppor
 
 The capabilities panel distinguishes API support, actual storage/handle outcomes, observed folder-access failures, and current-library permissions. Permission queries do not prompt; grants remain explicit actions. Where the audio element does not accept volume changes, use device volume controls.
 
+## Synchronized lyrics
+
+Use **Lyrics** in the player to open a right-side panel on desktop or a full-screen sheet on phones. Synchronized lines follow the native playback clock; click a line to seek. Scrolling pauses following so you can read ahead; **Follow lyrics** resumes it. Reduced motion uses immediate scrolling. Opening lyrics never replaces the audio element or changes your playlist.
+
+TrackIndex looks for a UTF-8 `.lrc` beside the audio file first (`Song.lrc` or `Song.mp3.lrc`). Multiple candidates or tracks sharing a filename stem require your choice. You can also import an LRC through the panel's options. Plain lyrics are readable without invented timing, and instrumental recordings are labelled.
+
+Online lyrics are optional. **Allow online lyrics** permits requests to [LRCLIB](https://lrclib.net/); **Use local lyrics only** keeps lookup offline. Change this choice in Lyrics options. Only the current track is queried while the panel is open and the page is visible. Automatic lookup requires a confirmed title tag rather than a filename fallback. Matching checks title, artist, album when present, and duration within two seconds. **Find another version** lets you review alternatives rather than silently choosing a different recording.
+
+LRCLIB receives title, artist, album and duration for automatic lookup, or the title/artist you enter for search. No music, artwork, library paths or filenames are sent. Like any external service, it receives the network request and its originating IP address. Disabling lookup cancels requests; locally cached lyrics remain usable.
+
+Lyrics, your selected version, and per-track timing corrections are stored separately in IndexedDB and invalidated when the audio file fingerprint changes. Existing library records, drafts and artwork survive the database upgrade. Failed storage leaves lyrics available for the session with a clear warning. Forgetting a library removes its cached lyrics. **Adjust timing** moves lines earlier/later by 100 ms, with Reset. **Download LRC** includes your correction and reports a download request; place it beside the matching audio file yourself. Lyrics never write into your selected folder automatically.
+
+LRC inspection is bounded to 512 KiB and 10,000 lines. Multiple timestamps, fractional seconds, blank timed breaks, Unicode and embedded offsets are supported. Enhanced word tags are displayed as ordinary line text without word-level highlighting. Online failures, missing tags, missing matches and rate limits leave playback operational. Requests have a ten-second timeout and cancel on track changes, hiding or closing the panel.
+
 ## Browser modes
 
 | Capability | Direct folder access | Portable selection |
@@ -67,7 +81,7 @@ The capabilities panel distinguishes API support, actual storage/handle outcomes
 
 Feature detection determines what is offered. Chromium-based desktop browsers are recommended for full folder access. Firefox and Safari retain portable workflows. Actual codec support varies by browser and operating system; unsupported tracks remain visible and in the playlist. There is no decoder/transcoder fallback.
 
-The app requires an explicit selection and never discovers your system Music folder automatically. It does not rename, delete, copy, or write audio files. It does not fetch URL entries, external artwork, fonts, or metadata services. Forgetting a library removes browser records only.
+The app requires an explicit selection and never discovers your system Music folder automatically. It does not rename, delete, copy, or write audio files. It does not fetch URL entries, external artwork or fonts. LRCLIB requests occur only after you enable online lyrics. Forgetting a library removes browser records only.
 
 ## Playlists and ordering
 
@@ -97,6 +111,7 @@ Use Refresh to discover external changes; automatic filesystem watching is not i
 - `src/platform`: capability reporting, portable/direct adapters, verified writes, IndexedDB.
 - `src/app`: normalized Zustand state and orchestration.
 - `src/playback`: one native audio element and independently tested queue logic.
+- `src/lyrics`: bounded LRC parsing/timing, opt-in LRCLIB matching, cancellation and independent lyrics caching.
 - `src/metadata`: progressively scheduled Blob parsing in a module worker, thumbnailing and bounded caching. Parsing falls back to sequential work if workers fail.
 - `src/ui` and `src/styles`: reusable controls, virtualized track lists, onboarding and token-based styling.
 
@@ -111,11 +126,13 @@ npm run test:e2e
 
 Vitest covers playlist/path safety, numbered imports, group editing/history, queue traversal, adapter boundaries, metadata fixtures, IndexedDB recovery, and save failure/commit behavior. Playwright covers portable workflows across Chromium, Firefox and WebKit, draft recovery, export contents, group drag/cancel, selection/search on 10,000 tracks, and playback on supported test platforms.
 
+Lyrics tests cover local-file priority, offsets and corrections, matching and manual review, opt-in/network privacy, cancellation, rate limits, storage failures and schema upgrades. Browser tests use original test text and mocked LRCLIB responses, and cover native seeking, manual Follow, LRC download, imports, remembered versions, keyboard access and responsive layouts. Windows WebKit presentation fixtures do not claim native playback coverage.
+
 Direct save/deletion tests inject a directory-handle adapter backed by isolated temporary files. They verify saved bytes, confirmed playlist-only deletion, conflict rejection, uncertain-operation reconciliation, and unchanged audio bytes. These tests exercise the application protocol; they do not automate native OS pickers or real browser permission persistence. Temporary fixtures use generated PCM audio, never user music.
 
 Playwright WebKit on Windows lacks native audio decoding; its playback test is skipped there. WebKit browser tests are Safari-engine checks, not a substitute for testing real Safari on macOS.
 
-An optional read-only local-library acceptance test scans metadata, plays available FLAC/MP3/M4A samples, checks live analysis, creates/exports a reviewed draft, restores it through actual folder reselection, and verifies unchanged filenames, sizes and modification times. No application or CI configuration depends on a personal folder:
+An optional read-only local-library acceptance test scans metadata, plays available FLAC/MP3/M4A samples, checks live analysis and imported LRC seeking, creates/exports a reviewed draft, restores it through actual folder reselection, and verifies unchanged filenames, sizes and modification times. No application or CI configuration depends on a personal folder:
 
 ```powershell
 $env:TRACKINDEX_LOCAL_LIBRARY = 'C:\path\to\test-library'
@@ -134,6 +151,8 @@ Browser tests start an isolated server on port 5174, overrideable with `TRACKIND
 - Use actual Android Chrome and iPhone Safari to verify picker behavior, native playback, system-controlled volume, software-keyboard dialogs, safe areas, and touch dragging. Desktop emulation does not establish these device capabilities.
 
 CI runs lint, unit/integration tests, a production build, and browser tests. Native picker/permission and real macOS/Linux checks remain manual before release.
+
+The first-use workflow review and proposed simplification backlog are in [docs/uat-findings.md](docs/uat-findings.md). These recommendations are separate from the lyrics implementation.
 
 ## Dependency notice
 

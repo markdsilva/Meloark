@@ -13,12 +13,12 @@ export async function readMetadata(file: File, fallback: string, artwork: boolea
     // A parser's MP3 CBR profile can be based on only its initial frames.
     // Preserve it as reported information, never as proof of constant bitrate.
     const pcm = /^(PCM|IEEE_FLOAT)/i.test(codec ?? '')
-    return { title: parsed.common.title || fallback, artist: parsed.common.artist || '', album: parsed.common.album || '',
+    return { title: parsed.common.title || fallback, titleFromTag: !!parsed.common.title?.trim(), artist: parsed.common.artist || '', album: parsed.common.album || '',
       duration: parsed.format.duration, codec, artwork: image,
       container: format.container, codecProfile: format.codecProfile,
       bitrate: positive(format.bitrate), bitrateKind: pcm ? 'constant' : 'reported',
       sampleRate: positive(format.sampleRate), bitsPerSample: format.lossless ? positive(format.bitsPerSample) : undefined,
       channels: positive(format.numberOfChannels), lossless: format.lossless, technicalVersion: 1,
       error: codec ? undefined : 'Audio format metadata could not be read.' }
-  } catch (error) { return { title: fallback, artist: '', album: '', technicalVersion: 1, error: error instanceof Error ? error.message : 'Metadata unavailable.' } }
+  } catch (error) { return { title: fallback, titleFromTag: false, artist: '', album: '', technicalVersion: 1, error: error instanceof Error ? error.message : 'Metadata unavailable.' } }
 }

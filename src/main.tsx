@@ -3,5 +3,6 @@ import { createRoot } from 'react-dom/client'
 import { App } from './ui/shell/App'
 import './styles/tokens.css'
 import './styles/app.css'
+import './styles/lyrics.css'
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)

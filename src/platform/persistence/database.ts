@@ -2,13 +2,18 @@ import { openDB, type DBSchema } from 'idb'
 import type { Library } from '../../app/store'
 import type { DirectoryHandle } from '../filesystem/types'
 import { storageOutcome, handleOutcome } from '../capabilities/status'
+import type { LyricsRecord } from '../../lyrics/types'
 
 interface TrackIndexDB extends DBSchema {
   libraries: { key: string; value: Library }
   handles: { key: string; value: DirectoryHandle }
+  lyrics: { key: string; value: LyricsRecord; indexes: { libraryId: string } }
 }
-const database = () => openDB<TrackIndexDB>('trackindex-web', 1, {
-  upgrade(db) { db.createObjectStore('libraries', { keyPath: 'id' }); db.createObjectStore('handles') },
+const database = () => openDB<TrackIndexDB>('trackindex-web', 2, {
+  upgrade(db, oldVersion) {
+    if (oldVersion < 1) { db.createObjectStore('libraries', { keyPath: 'id' }); db.createObjectStore('handles') }
+    if (oldVersion < 2) db.createObjectStore('lyrics', { keyPath: 'trackId' }).createIndex('libraryId', 'libraryId')
+  },
 }).catch(error => { storageOutcome(error); throw error })
 export async function loadLibraries(): Promise<Library[]> {
   const db = await database()
@@ -41,9 +46,19 @@ export async function loadHandle(id: string) {
 export async function deleteLibrary(id: string) {
   const db = await database()
   try {
-    const tx = db.transaction(['libraries', 'handles'], 'readwrite')
+    const tx = db.transaction(['libraries', 'handles', 'lyrics'], 'readwrite')
     await tx.objectStore('libraries').delete(id)
     await tx.objectStore('handles').delete(id)
+    let cursor = await tx.objectStore('lyrics').index('libraryId').openCursor(id)
+    while (cursor) { await cursor.delete(); cursor = await cursor.continue() }
     await tx.done
   } finally { db.close() }
+}
+export async function loadLyrics(trackId: string) {
+  const db = await database()
+  try { return await db.get('lyrics', trackId) } finally { db.close() }
+}
+export async function saveLyrics(record: LyricsRecord) {
+  const db = await database()
+  try { await db.put('lyrics', record) } finally { db.close() }
 }

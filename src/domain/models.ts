@@ -2,6 +2,7 @@ export type MetadataStatus = 'pending' | 'loading' | 'ready' | 'error'
 export type PlaybackSupport = 'unknown' | 'likely' | 'unsupported' | 'failed'
 export interface TrackMetadata {
   title: string
+  titleFromTag?: boolean
   artist: string
   album: string
   duration?: number

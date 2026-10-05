@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Check, ChevronRight, Disc3, Download, FileMusic, FolderOpen, HardDrive, Headphones, HelpCircle, LibraryBig, ListMusic, LoaderCircle, Plus, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Undo2, Redo2, X } from 'lucide-react'
 import { bootstrap, cancelScan, createNormalizedCopy, exportPlaylist, forgetLibrary, history, loadPlaylist, notify, openDirectory, openPortable, persistNow, reconnect, reconcileSource, savePlaylist, scanLibrary, selectLibrary, selectView, useApp } from '../../app/store'
 import { isDirty, naturalCompare } from '../../domain/models'
@@ -21,6 +21,8 @@ import { PlaylistNavigation } from '../playlist/PlaylistNavigation'
 import { Guide, GuideInvitation, startGuide } from '../onboarding/Guide'
 import { Tooltips } from '../shared/Tooltips'
 import { BrowseTabs } from '../shared/BrowseTabs'
+import { useLyrics } from '../../lyrics/store'
+const LyricsPanel = lazy(() => import('../lyrics/LyricsPanel').then(module => ({ default: module.LyricsPanel })))
 
 export function App() {
   const state = useApp(), library = state.libraries.find(l => l.id === state.activeLibrary)
@@ -33,6 +35,7 @@ export function App() {
   const mobile = useMediaQuery('(max-width: 767px)')
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('trackindex-sidebar') === 'collapsed' } catch { return false } })
   const [picker, setPicker] = useState(false)
+  const lyricsOpen = useLyrics(s => s.open)
   useEffect(() => { if (!mobile) setSidebar(false) }, [mobile])
   function toggleCollapsed() { setCollapsed(value => { try { localStorage.setItem('trackindex-sidebar', value ? 'expanded' : 'collapsed') } catch { /* Session preference. */ } return !value }) }
   const folderInput = useRef<HTMLInputElement>(null), fileInput = useRef<HTMLInputElement>(null)
@@ -100,14 +103,14 @@ export function App() {
       </div>
       <div className="rail-actions"><button className="icon-button" aria-label="Libraries and playlists" title="Libraries and playlists" onClick={() => setPicker(true)}><FolderOpen size={20} /></button><button className="icon-button" aria-label="Add library" title="Add library" onClick={() => chooseFolder()}><Plus size={20} /></button><button className="icon-button" aria-label="Create playlist" title="Create playlist" disabled={!library || library.scanning || state.busy} onClick={() => setCreate(true)}><FileMusic size={20} /></button></div><div className="sidebar-bottom"><div className="private-note"><ShieldCheck size={18} /><span>Private by design<small>Your music stays on your device.</small></span></div><button className="nav-item" aria-label="Browser capabilities" title="Browser capabilities" onClick={() => { setSidebar(false); setPicker(false); setHelp(true) }}><HelpCircle size={17} />Browser capabilities</button></div>
     </aside>)
-  return <div className={`app ${collapsed && !mobile ? 'collapsed' : ''}`}>
+  return <div className={`app ${collapsed && !mobile ? 'collapsed' : ''} ${lyricsOpen ? 'lyrics-open' : ''}`}>
     <input ref={element => { folderInput.current = element; if (element && capabilities.directoryInput) element.setAttribute('webkitdirectory', '') }} type="file" multiple className="sr-only" aria-label="Select library folder" onChange={event => { const files = Array.from(event.target.files ?? []); if (files.length) void openPortable(files, event.target.dataset.reconnect || undefined) }} />
     <input ref={fileInput} type="file" multiple className="sr-only" aria-label="Select library files" onChange={event => { const files = Array.from(event.target.files ?? []); if (files.length) void openPortable(files, event.target.dataset.reconnect || undefined) }} />
     {!mobile && navigation}
     {mobile && sidebar && <Dialog title="Navigation" className="navigation-drawer" close={() => setSidebar(false)}>{navigation}</Dialog>}
     {picker && !mobile && <Dialog title="Libraries and playlists" className="navigation-picker" close={() => setPicker(false)}>{navigation}</Dialog>}
     <main className="main">
-      <header className="topbar"><div className="breadcrumbs"><button className="icon-button ghost-button navigation-toggle" aria-label={mobile ? 'Toggle navigation' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={mobile ? sidebar : !collapsed} onClick={event => { event.currentTarget.focus(); if (mobile) setSidebar(!sidebar); else toggleCollapsed() }}>{collapsed && !mobile ? <ChevronRight size={20} /> : <ChevronRight className="collapse-chevron" size={20} />}</button><span>Workspace</span><ChevronRight size={14} /><strong>{library?.name ?? 'Welcome'}</strong></div><div className="topbar-end"><span className="privacy-pill"><ShieldCheck size={14} />100% local</span><button className="icon-button status-help" aria-label="Browser capabilities" data-tooltip="Help, getting started and browser capabilities" onClick={() => setHelp(true)}><HelpCircle size={19} /></button></div></header>
+      <header className="topbar"><div className="breadcrumbs"><button className="icon-button ghost-button navigation-toggle" aria-label={mobile ? 'Toggle navigation' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={mobile ? sidebar : !collapsed} onClick={event => { event.currentTarget.focus(); if (mobile) setSidebar(!sidebar); else toggleCollapsed() }}>{collapsed && !mobile ? <ChevronRight size={20} /> : <ChevronRight className="collapse-chevron" size={20} />}</button><span>Workspace</span><ChevronRight size={14} /><strong>{library?.name ?? 'Welcome'}</strong></div><div className="topbar-end"><span className="privacy-pill"><ShieldCheck size={14} />Music stays local</span><button className="icon-button status-help" aria-label="Browser capabilities" data-tooltip="Help, getting started and browser capabilities" onClick={() => setHelp(true)}><HelpCircle size={19} /></button></div></header>
       {state.storageError && <div className="storage-banner" role="status">{state.storageError}</div>}
       {state.notice && <div className="notice" role="status"><span>{state.notice}</span><button className="icon-button" aria-label="Dismiss message" onClick={() => notify(undefined)}><X size={16} /></button></div>}
       <div className="guide-mobile-host" />
@@ -143,6 +146,7 @@ export function App() {
       </div>}
       {!state.ready && <div className="startup-status"><LoaderCircle className="spin" size={15} />Restoring workspace…</div>}
     </main>
+    {lyricsOpen && <Suspense fallback={null}><LyricsPanel /></Suspense>}
     <Player />
     <Guide />
     <Tooltips />

@@ -44,6 +44,16 @@ test('optional local-library scan, metadata, playback, review, export, and recov
       await page.getByRole('button', { name: 'Pause', exact: true }).click(); await page.getByRole('slider', { name: 'Seek', exact: true }).fill('4')
       await expect(page.locator('.seek')).toContainText('0:04')
     }
+    // Original fixture text tests lyrics against real native audio without
+    // sending personal track metadata or writing sidecars to the library.
+    await page.getByRole('contentinfo').getByRole('button', { name: 'Lyrics', exact: true }).click()
+    const lyrics = page.locator('#lyrics-panel')
+    await lyrics.getByLabel('Import lyrics file', { exact: true }).setInputFiles({ name: 'Acceptance.lrc', mimeType: 'text/plain', buffer: Buffer.from('[00:00]Read-only acceptance line\n[00:04]Seek acceptance line') })
+    await expect(lyrics.locator('.lyric-line')).toHaveCount(2)
+    await lyrics.getByRole('button', { name: 'Seek to 0:04: Seek acceptance line', exact: true }).click()
+    await expect(lyrics.locator('.lyric-line.current')).toHaveText('Seek acceptance line')
+    await expect(page.getByRole('contentinfo').getByRole('slider', { name: 'Seek', exact: true })).toHaveValue('4')
+    await page.getByRole('button', { name: 'Close lyrics', exact: true }).click()
     const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export', exact: true }).click()
     const stream = await (await download).createReadStream(), chunks: Buffer[] = []; for await (const chunk of stream!) chunks.push(chunk)
     expect(Buffer.concat(chunks).toString().split('\n').filter(line => line && !line.startsWith('#'))).toHaveLength(audioCount)

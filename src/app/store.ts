@@ -13,6 +13,7 @@ import { loadLibraries, saveLibraries, loadHandle, saveHandle, deleteLibrary } f
 import { player, usePlayer } from '../playback/player'
 import { scheduleMetadata } from '../metadata/scheduler'
 import { validatePlaylistDeletion } from '../platform/filesystem/deleteProtocol'
+import { forgetLyricsLibrary } from '../lyrics/store'
 
 export interface Library {
   id: string; name: string; kind: 'direct' | 'portable'; connected: boolean; scanning: boolean; generation: number
@@ -212,18 +213,25 @@ export async function loadPlaylist(path: string, libraryId = activeLibrary()?.id
     return true
   } catch (error) { notify(message(error)); throw error }
 }
-export function createPlaylist(name = 'My playlist.m3u8', paths?: string[]) {
-  const library = activeLibrary()
-  if (!library || library.scanning) return
+export function playlistNameError(name: string, library = activeLibrary()) {
+  if (!library || library.scanning || useApp.getState().busy) return 'Wait for the library operation to finish, then try again.'
+  if (!name.trim()) return 'Enter a playlist name.'
   const path = name.toLowerCase().endsWith('.m3u8') ? name : `${name}.m3u8`
-  if (normalizeRelative(path) !== path || path.includes('\\')) { notify('Use a valid library-relative M3U8 name.'); return }
-  if (library.playlists.includes(path) || Object.values(library.sessions).some(session => session.document.path === path)) { notify('A playlist with that name already exists. Open it or choose another name.'); return }
+  if (normalizeRelative(path) !== path || path.includes('\\')) return 'Use a valid library-relative M3U8 name.'
+  if (library.playlists.includes(path) || Object.values(library.sessions).some(session => session.document.path === path)) return 'A playlist with that name already exists. Open it or choose another name.'
+}
+export function createPlaylist(name = 'My playlist.m3u8', paths?: string[], reportError = true) {
+  const library = activeLibrary()
+  const error = playlistNameError(name, library)
+  if (error || !library) { if (reportError) notify(error); return { ok: false as const, error: error ?? 'Choose a library first.' } }
+  const path = name.toLowerCase().endsWith('.m3u8') ? name : `${name}.m3u8`
   const document = emptyDocument(path)
   const tracks = new Map(Object.values(library.tracks).map(track => [track.path, track]))
   const entries = (paths ?? []).flatMap(trackPath => { const track = tracks.get(trackPath); return track ? [entryFor(track, path)] : [] })
   const session: PlaylistSession = { id: path, name: filename(path), document, entries, saved: [], baseline: null, undo: [], redo: [], revision: 0, status: 'new' }
   updateLibrary(library.id, current => ({ ...current, sessions: { ...current.sessions, [path]: session }, activePlaylist: path }))
   selectView('playlist')
+  return { ok: true as const, path }
 }
 function entryFor(track: Track, target: string): PlaylistEntry { return { id: newId(), raw: relativeReference(track.path, target), path: track.path, trackId: track.id, prelude: [] } }
 export function updateSession(update: (session: PlaylistSession) => PlaylistSession) {
@@ -330,7 +338,10 @@ export async function forgetLibrary(id: string) {
   scanners.get(id)?.abort(); sources.delete(id)
   useApp.setState(state => ({ libraries: state.libraries.filter(library => library.id !== id), activeLibrary: state.activeLibrary === id ? state.libraries.find(l => l.id !== id)?.id : state.activeLibrary }))
   syncPlayer()
-  try { await deleteLibrary(id) } catch { useApp.setState({ storageError: 'Could not remove the remembered library from browser storage.' }) }
+  try {
+    await forgetLyricsLibrary(id)
+    await deleteLibrary(id)
+  } catch { useApp.setState({ storageError: 'Could not remove the remembered library from browser storage.' }) }
   persistSoon()
 }
 export function playlistPaths(library: Library) {

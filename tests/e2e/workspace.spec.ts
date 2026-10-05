@@ -65,7 +65,8 @@ test('10,000 tracks use a bounded DOM and retain selection across search', async
   await page.goto('/')
   await expect(page.getByText('Restoring workspace…')).toBeHidden()
   await page.evaluate(async () => {
-    const storePath = '/src/app/store.ts', { useApp } = await import(storePath)
+    const storePath = '/src/app/store.ts', { useApp, bootstrap } = await import(storePath)
+    await bootstrap()
     const tracks = Object.fromEntries(Array.from({ length: 10_000 }, (_, i) => {
       const id = `track-${i}`, title = `Track ${String(i + 1).padStart(5, '0')}`
       return [id, { id, path: `${title}.wav`, filename: `${title}.wav`, size: 100, lastModified: 0, index: null, metadataStatus: 'ready', metadata: { title, artist: 'Synthetic test library', album: '' }, support: 'likely' }]

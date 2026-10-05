@@ -20,12 +20,17 @@ export function Menu({ anchor, items, close, label = 'Actions' }: { anchor: Menu
   }, [anchor])
   useEffect(() => {
     const dismiss = (event: Event) => { if (!ref.current?.contains(event.target as Node)) closeRef.current() }
+    const scroll = (event: Event) => {
+      // Only scrolling an ancestor moves the anchor. Independent panels and the
+      // menu itself may scroll without invalidating its position.
+      if (event.target === document || event.target instanceof Element && event.target.contains(anchor.opener)) closeRef.current()
+    }
     const resize = () => closeRef.current()
     document.addEventListener('pointerdown', dismiss)
-    document.addEventListener('scroll', dismiss, true)
+    document.addEventListener('scroll', scroll, true)
     window.addEventListener('resize', resize)
     return () => {
-      document.removeEventListener('pointerdown', dismiss); document.removeEventListener('scroll', dismiss, true); window.removeEventListener('resize', resize)
+      document.removeEventListener('pointerdown', dismiss); document.removeEventListener('scroll', scroll, true); window.removeEventListener('resize', resize)
       if (anchor.opener.isConnected) anchor.opener.focus({ preventScroll: true })
     }
   }, [anchor])

@@ -130,6 +130,7 @@ class PlayerController {
     if (id) void this.play(id)
   }
   seek(seconds: number) { if (this.audio && Number.isFinite(this.audio.duration)) { this.audio.currentTime = Math.max(0, Math.min(seconds, this.audio.duration)); usePlayer.setState({ position: this.audio.currentTime }) } }
+  currentTime() { return this.audio?.currentTime ?? usePlayer.getState().position }
   setVolume(volume: number) {
     this.element().volume = volume; usePlayer.setState({ volume })
     try { localStorage.setItem('trackindex-volume', String(volume)) } catch { /* Session preference still works. */ }

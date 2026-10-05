@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown, ArrowUp, FileMusic, ListOrdered } from 'lucide-react'
 import { analyzeIndexes } from '../../domain/filenameIndex'
-import { createPlaylist, useApp } from '../../app/store'
+import { createPlaylist, playlistNameError, useApp } from '../../app/store'
 import { Dialog } from '../shared/Dialog'
 
 export function CreatePlaylist({ close }: { close: () => void }) {
@@ -12,6 +12,8 @@ export function CreatePlaylist({ close }: { close: () => void }) {
   const [mode, setMode] = useState<'empty' | 'indexes'>('empty')
   const [paths, setPaths] = useState(() => groups.flatMap(group => group.tracks.map(track => track.path)))
   const [reviewed, setReviewed] = useState(false)
+  const [error, setError] = useState<string>()
+  const nameInput = useRef<HTMLInputElement>(null)
   const parent = useRef<HTMLDivElement>(null)
   const list = useVirtualizer({ count: mode === 'indexes' ? paths.length : 0, getScrollElement: () => parent.current, estimateSize: () => 42, overscan: 6 })
   function move(index: number, offset: number) {
@@ -22,7 +24,8 @@ export function CreatePlaylist({ close }: { close: () => void }) {
   }
   return <Dialog title="Create a playlist" close={close} wide={mode === 'indexes'}>
     <p className="dialog-intro">A playlist is an order of tracks. Creating or editing one never renames your music.</p>
-    <label className="field">Playlist name<input value={name} onChange={event => setName(event.target.value)} autoFocus placeholder="My playlist" /></label>
+    <label className="field">Playlist name<input ref={nameInput} value={name} aria-invalid={!!error} aria-describedby={error ? 'playlist-name-error' : undefined} onChange={event => { setName(event.target.value); setError(undefined) }} autoFocus placeholder="My playlist" /></label>
+    {error && <div id="playlist-name-error" className="field-error" role="alert"><p>{error}</p>{error.includes('already exists') && <button className="text-button" onClick={() => { let index = 2; let next = `${name.replace(/\.m3u8$/i, '')} ${index}`; while (playlistNameError(next, library)?.includes('already exists')) next = `${name.replace(/\.m3u8$/i, '')} ${++index}`; setName(next); setError(undefined); nameInput.current?.focus() }}>Use an available name</button>}</div>}
     <div className="mode-options">
       <label className={mode === 'empty' ? 'chosen' : ''}><input type="radio" name="initial-order" checked={mode === 'empty'} onChange={() => setMode('empty')} /><FileMusic /><span><strong>Start empty</strong><small>Add tracks from your library</small></span></label>
       <label className={mode === 'indexes' ? 'chosen' : ''}><input type="radio" name="initial-order" checked={mode === 'indexes'} disabled={!paths.length} onChange={() => setMode('indexes')} /><ListOrdered /><span><strong>Review filename order</strong><small>Use folder-local numbered filenames as a starting point</small></span></label>
@@ -37,6 +40,6 @@ export function CreatePlaylist({ close }: { close: () => void }) {
       </div>)}</div></div>
       <label className="review-confirm"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} />I reviewed the displayed order, including ties and unindexed tracks.</label>
     </>}
-    <div className="dialog-actions"><button className="button secondary" onClick={close}>Cancel</button><button className="button primary" disabled={!name.trim() || (mode === 'indexes' && !reviewed)} onClick={() => { createPlaylist(name.trim(), mode === 'indexes' ? paths : undefined); const current = useApp.getState().libraries.find(l => l.id === library.id); if (current?.activePlaylist !== library.activePlaylist) close() }}>Create draft</button></div>
+    <div className="dialog-actions"><button className="button secondary" onClick={close}>Cancel</button><button className="button primary" disabled={!name.trim() || (mode === 'indexes' && !reviewed)} onClick={() => { const result = createPlaylist(name.trim(), mode === 'indexes' ? paths : undefined, false); if (result.ok) close(); else { setError(result.error); nameInput.current?.focus() } }}>Create draft</button></div>
   </Dialog>
 }
