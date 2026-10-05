@@ -7,7 +7,7 @@
 <p align="center"><strong>A home for your music.</strong><br />A local-first music player and library, right in your browser.</p>
 
 <p align="center">
-  <strong><a href="https://github.com/markdsilva/Meloark">Meloark on GitHub →</a></strong><br />
+  <strong><a href="https://meloark.markdsilva.com/">Open Meloark →</a></strong><br />
   No installation · No account · No music uploads
 </p>
 
