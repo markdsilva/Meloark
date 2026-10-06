@@ -15,7 +15,7 @@
 
 Meloark combines **melody** and **ark** — a home for your music collection. Play your own local audio, browse albums and metadata, build playlists, and follow lyrics without uploading your music.
 
-The repository is being prepared for a fresh Cloudflare Worker named `meloark`. A public app URL will be added after deployment; no new hostname is assumed here.
+Meloark is live at **[meloark.markdsilva.com](https://meloark.markdsilva.com/)**, served by the `meloark` Cloudflare Worker.
 
 ## Your collection, on your terms
 
@@ -27,7 +27,7 @@ Your audio stays on your device. Playlist edits never rename or delete your musi
 
 ## Get started in a minute
 
-1. **Open Meloark.** [Run it locally](#run-locally), or open your deployed instance. Start the optional tour, or skip it and explore.
+1. **[Open Meloark](https://meloark.markdsilva.com/).** You can also [run it locally](#run-locally). Start the optional tour, or skip it and explore.
 2. **Add your music.** Choose **Choose a music folder** and select your local collection. Subfolders are included. You can also select files, and play tracks straight away—no playlist needed.
 3. **Create a playlist.** Click **New playlist**, give it a name, keep **Start empty** selected, and choose **Create draft**. Already have an M3U/M3U8? Open it from the sidebar instead.
 4. **Make it yours.** In **All tracks**, use **+** to add songs. Switch to **Playlist** to drag tracks into order; **Undo** is there if you change your mind.
@@ -126,10 +126,13 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run check:seo
 npm run preview
 ```
 
 The production output is `dist/`. Serve it from any static HTTPS host. Core library management happens locally; the static host only serves application assets. An offline-installable PWA is not included.
+
+`npm run check:seo` validates the built HTML, canonical URL, site-name structured data, crawler files, and local asset references. It runs locally against `dist/` without network access. The canonical URL, `og:url`, structured data, sitemap, robots sitemap reference, and package homepage all identify `https://meloark.markdsilva.com/`. For a fork on a different hostname, update these together. The sitemap lists only the public homepage; local libraries and playlists are not public URLs. SPA fallback continues to serve the app on nested paths.
 
 ### Automated verification
 

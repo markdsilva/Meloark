@@ -1,6 +1,7 @@
 {
   "name": "meloark",
   "description": "A local-first music player and library for your own music, right in the browser.",
+  "homepage": "https://meloark.markdsilva.com/",
   "repository": {
     "type": "git",
     "url": "https://github.com/markdsilva/Meloark.git"
@@ -16,6 +17,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc -b",
+    "check:seo": "node scripts/check-seo.mjs",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
