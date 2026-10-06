@@ -1,29 +1,37 @@
-<p align="center">
-  <img src="public/favicon.svg" alt="Meloark amber music mark" width="72" height="72" />
-</p>
-
 <h1 align="center">Meloark</h1>
 
-<p align="center"><strong>A home for your music.</strong><br />A local-first music player and library, right in your browser.</p>
+<p align="center">
+  <img src="docs/assets/meloark-banner.svg" alt="Meloark — Melody + ark. A home for your music." width="960" />
+</p>
+
+<p align="center">A local-first music player and library, right in your browser.<br />
+  <sub>No installation · No account · No music uploads</sub>
+</p>
 
 <p align="center">
-  <strong><a href="https://meloark.markdsilva.com/">Open Meloark →</a></strong><br />
-  No installation · No account · No music uploads
+  <strong><a href="https://meloark.markdsilva.com/">Open Meloark →</a></strong>
+</p>
+
+<p align="center">
+  <a href="#get-started-in-a-minute">Get started</a> ·
+  <a href="#your-collection-on-your-terms">Features</a> ·
+  <a href="#run-locally">Run locally</a> ·
+  <a href="#cloudflare-workers-static-assets-deployment">Self-host</a>
 </p>
 
 ---
 
 Meloark combines **melody** and **ark** — a home for your music collection. Play your own local audio, browse albums and metadata, build playlists, and follow lyrics without uploading your music.
 
-Meloark is live at **[meloark.markdsilva.com](https://meloark.markdsilva.com/)**, served by the `meloark` Cloudflare Worker.
-
 ## Your collection, on your terms
 
-| Browse & listen | Build your playlist | Follow the music |
+| Your music | Your library | Your playlists |
 | --- | --- | --- |
-| Open local folders, explore albums, and play supported tracks immediately. | Add tracks, reorder them together, undo freely, and save or export an M3U8. | Enjoy artwork, audio details, live source bitrate, and synchronized lyrics. |
+| **Press play, straight away.**<br />Play supported local audio with seeking, shuffle, repeat, and a persistent player. | **Find your next listen.**<br />Browse albums, artwork, metadata, and folder or artist filters. | **Shape the sequence.**<br />Create or open playlists, reorder tracks together, undo edits, and save or export an M3U8. |
+| **Follow the words.**<br />Use local LRC lyrics, seek by line, and optionally look up a recording on LRCLIB. | **Look a little closer.**<br />Inspect codec details, sample rate, and live source bitrate for supported formats. | **Keep control.**<br />Use permission-based folder access or portable file selection, with your audio kept on your device. |
 
-Your audio stays on your device. Playlist edits never rename or delete your music. Online lyrics are optional and send recording details to LRCLIB only after you enable lookup.
+> [!NOTE]
+> **Your collection stays local.** Playlist edits never rename or delete your music. Online lyrics are optional and send recording details to LRCLIB only after you enable lookup.
 
 ## Get started in a minute
 
@@ -33,7 +41,8 @@ Your audio stays on your device. Playlist edits never rename or delete your musi
 4. **Make it yours.** In **All tracks**, use **+** to add songs. Switch to **Playlist** to drag tracks into order; **Undo** is there if you change your mind.
 5. **Keep your playlist.** Use **Save** to write an M3U8 with folder permission, or **Export** to download it. Place an exported file at the library-relative location shown by the app so its song references work.
 
-> **Browser tip:** Desktop Chrome or Edge offers the fullest experience, including permission-based folder access and playlist write-back. Firefox and Safari can still browse, play supported audio, edit, and export. Portable selections need to be reselected after a reload.
+> [!TIP]
+> Desktop Chrome or Edge offers the fullest experience, including permission-based folder access and playlist write-back. Firefox and Safari can still browse, play supported audio, edit, and export. Portable selections need to be reselected after a reload.
 
 Want lyrics? Open **Lyrics** in the player. Meloark reads local `.lrc` files first; online lookup is your choice. Need help later? The header's **Help / browser capabilities** button can restart the tour.
 
@@ -270,4 +279,8 @@ Local packet inspection uses [Mediabunny](https://mediabunny.dev/api/PacketRetri
 
 ---
 
-[Source code](https://github.com/markdsilva/Meloark) · [Report an issue](https://github.com/markdsilva/Meloark/issues) · [License](LICENSE)
+<p align="center">
+  <a href="https://github.com/markdsilva/Meloark">Source code</a> ·
+  <a href="https://github.com/markdsilva/Meloark/issues">Report an issue</a> ·
+  <a href="LICENSE">License</a>
+</p>
