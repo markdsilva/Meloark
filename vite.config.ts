@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   // Optimize worker/lazy readers before selection so dependency discovery
   // cannot reload the dev page and disconnect its selected files.
-  optimizeDeps: { include: ['music-metadata', 'mediabunny'] },
+  optimizeDeps: { include: ['music-metadata', 'mediabunny', '@dnd-kit/react', '@dnd-kit/dom', '@tanstack/react-virtual'] },
   test: {
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],

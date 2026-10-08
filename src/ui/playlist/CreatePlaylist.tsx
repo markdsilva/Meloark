@@ -43,7 +43,7 @@ export function CreatePlaylist({ close }: { close: () => void }) {
     finally { setWorking(false) }
   }
   return <Dialog title="Create a playlist" close={() => { if (!working) close() }} wide={mode === 'indexes' || storage !== 'm3u8'}>
-    <p className="dialog-intro">Choose how to store your track order. M3U8-only keeps the existing draft and Save workflow.</p>
+    <p className="dialog-intro">Keep your order in a playlist, in the filenames, or in both.</p>
     <fieldset className="sync-options"><legend>Store playlist order</legend>{([
       ['m3u8', 'M3U8 only', 'Edit a playlist without renaming audio files.'],
       ['filenames', 'Numbered filenames only', 'Automatically number one complete audio folder. No M3U8 is created.'],

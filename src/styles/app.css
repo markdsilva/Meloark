@@ -147,11 +147,18 @@ h1, h2, h3, p { margin-top: 0; }
 .track-row.touch-reorder { touch-action: none; }
 .sync-options { border: 0; padding: 0; margin: 0 0 18px; }
 .sync-options legend { font-weight: 600; margin-bottom: 10px; }
-.sync-options label { display: flex; gap: 10px; padding: 10px 0; align-items: flex-start; }
+.sync-options label { display: flex; gap: 10px; padding: 12px; margin-top: 6px; align-items: flex-start; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.sync-options label:hover { background: var(--accent-soft); }
+.sync-options label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.sync-options label:has(input:disabled) { opacity: .55; cursor: default; }
+.sync-options input { flex-shrink: 0; margin: 2px 0 0; }
+.sync-options strong { font-size: 12px; }
 .sync-options small, .sync-preview small { display: block; color: var(--subtle); margin-top: 4px; }
 .sync-preview { max-height: 230px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; margin: 12px 0; position: relative; }
 .sync-preview > div > div { display: flex; gap: 12px; padding: 8px 12px; font-size: 11px; border-bottom: 1px solid var(--border); overflow: hidden; }
 .sync-preview > div > div > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sync-preview > div > div > span:first-child { min-width: 20px; color: var(--subtle); font-variant-numeric: tabular-nums; }
+.sync-preview small { color: var(--accent-text); overflow: hidden; text-overflow: ellipsis; }
 .row-number { color: var(--subtle); min-width: 20px; text-align: right; font-variant-numeric: tabular-nums; }
 .row-number.active { color: var(--accent-text); }
 .row-play { margin-left: auto; width: 24px; opacity: 0; }

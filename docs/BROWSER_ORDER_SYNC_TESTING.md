@@ -2,7 +2,17 @@
 
 Branch: `feat/browser-order-sync`. No merge or production deployment is part of this experiment. The implementation is browser-native TypeScript; TrackIndex is a behavior reference only, with no Windows/Python backend copied.
 
-## Windows setup
+## Test the Cloudflare branch preview
+
+No local checkout is needed. Open the HTTPS preview for **feat/browser-order-sync** in current desktop Chrome or Edge on Windows, then follow the sample-folder checks below. Use the direct **Choose a music folder** button for rename tests. Selecting individual files uses portable mode and cannot rename the originals.
+
+Use the preview's own hostname, separate from the main production site, and keep using that same preview URL while testing. Folder permissions, drafts and recovery records belong to the exact browser origin; switching preview URLs can lose access to the remembered recovery session. This branch adds an IndexedDB v3 recovery store, while the older main build uses v2. The test preview must not share the main site's origin.
+
+The branch includes `"previews": {}` in `wrangler.jsonc` for the already-configured `npx wrangler preview` command. Assets and SPA routing stay at the top level. GitHub Actions performs checks only; Cloudflare's existing branch integration handles preview publication. No Cloudflare account settings or main branch deployment are changed by this work.
+
+Native support and write permission are verified on a disposable probe before music is renamed. Unsupported browsers/filesystems keep M3U8-only available. No experimental browser flag is needed or recommended.
+
+## Optional Windows local setup
 
 Install Git and Node.js 24 LTS. In PowerShell, use a separate checkout so your normal Meloark checkout and main branch stay untouched:
 
@@ -13,7 +23,7 @@ npm ci
 npm run dev -- --port 5176 --strictPort
 ```
 
-Open `http://127.0.0.1:5176` in current desktop Chrome or Edge. Keep this port separate from your usual dev origin: this test adds an IndexedDB v3 recovery store, and an older main-branch build still opens v2. No experimental browser flag is needed or recommended. Native support and write permission are verified on a disposable probe when enabling filename sync; an unsupported browser or filesystem leaves the ordinary playlist workflow available.
+Open `http://127.0.0.1:5176` in current desktop Chrome or Edge. Keep this port separate from your usual dev origin for the storage-version reason above.
 
 After future branch updates:
 

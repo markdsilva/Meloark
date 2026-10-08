@@ -9,7 +9,7 @@ export default defineConfig({
   fullyParallel: true,
   workers: 3,
   use: { baseURL: url, trace: 'retain-on-failure' },
-  webServer: { command: `npm run dev -- --port ${port} --strictPort`, url, reuseExistingServer: false },
+  webServer: { command: `npm run ${process.env.MELOARK_TEST_BUILD === '1' ? 'preview' : 'dev'} -- --port ${port} --strictPort`, url, reuseExistingServer: false },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], launchOptions: { executablePath: process.env.MELOARK_CHROMIUM_EXECUTABLE } } },
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },

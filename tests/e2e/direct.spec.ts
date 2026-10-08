@@ -62,6 +62,36 @@ async function connectFixture(page: Page) {
   } }
 }
 test.beforeEach(({ page }, info) => { void page; test.skip(info.project.name !== 'chromium', 'Direct filesystem capability is tested in Chromium; portable tests run on every engine.') })
+test('sync choices preview cleanly on desktop/mobile and a failed native capability leaves music unchanged', async ({ page }) => {
+  const fixture = await connectFixture(page)
+  try {
+    await page.evaluate(async () => {
+      const path = '/src/app/store.ts', { sources, activeLibrary } = await import(path)
+      sources.get(activeLibrary().id).probeRename = async () => { throw new Error('This browser does not provide native file renaming. Use M3U8-only mode.') }
+    })
+    await page.getByRole('button', { name: 'New playlist', exact: true }).click()
+    await page.getByRole('radio', { name: /Numbered filenames \+ M3U8/ }).check()
+    await expect(page.getByLabel('Filename changes preview')).toContainText('01 - A.wav')
+    await expect(page.getByRole('button', { name: 'Enable filename sync', exact: true })).toBeDisabled()
+    await page.getByRole('checkbox', { name: /I reviewed this folder/ }).check()
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.screenshot({ path: 'test-results/sync-choices-desktop.png', fullPage: true })
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+      const dialog = page.getByRole('dialog', { name: 'Create a playlist', exact: true })
+      expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+    }
+    await page.screenshot({ path: 'test-results/sync-choices-mobile.png', fullPage: true })
+    await page.getByRole('button', { name: 'Enable filename sync', exact: true }).click()
+    await expect(page.getByRole('alert')).toContainText('does not provide native file renaming')
+    expect(fixture.writes).toEqual([])
+    expect(await readFile(join(fixture.directory, 'A.wav'))).toEqual(fixture.audio)
+    expect(await readFile(join(fixture.directory, 'B.wav'))).toEqual(fixture.audio)
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(page.locator('.track-title strong')).toHaveText(['A', 'B'])
+  } finally { await fixture.cleanup() }
+})
 test('direct save verifies a temporary playlist and leaves audio bytes untouched', async ({ page }) => {
   const fixture = await connectFixture(page)
   try {

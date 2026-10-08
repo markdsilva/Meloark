@@ -8,6 +8,7 @@ import { playbackSupport } from '../platform/capabilities/detect'
 import { usePlatformStatus } from '../platform/capabilities/status'
 import type { LibrarySource } from '../platform/filesystem/types'
 import { PortableSource } from '../platform/filesystem/portable'
+import { DirectSource } from '../platform/filesystem/direct'
 import { equalBytes, hashBytes, UnverifiedWriteError } from '../platform/filesystem/saveProtocol'
 import { loadLibraries, saveLibraries, loadHandle, saveHandle, deleteLibrary } from '../platform/persistence/database'
 import { player, usePlayer } from '../playback/player'
@@ -105,7 +106,6 @@ export function bootstrap() {
       for (const library of libraries.filter(l => l.kind === 'direct')) {
         const handle = await loadHandle(library.id)
         if (handle) {
-          const { DirectSource } = await import('../platform/filesystem/direct')
           const source = new DirectSource(handle)
           sources.set(library.id, source)
           if ((await source.getAccess()).read === 'granted') void scanLibrary(library.id)
@@ -136,7 +136,6 @@ export async function openDirectory(reconnectId?: string) {
   try {
     const handle = await window.showDirectoryPicker!({ mode: 'read' })
     usePlatformStatus.setState({ pickerReason: undefined })
-    const { DirectSource } = await import('../platform/filesystem/direct')
     let id = reconnectId ?? newId()
     if (!reconnectId) {
       for (const [knownId, source] of sources) {
