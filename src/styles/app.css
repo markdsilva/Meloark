@@ -132,7 +132,7 @@ h1, h2, h3, p { margin-top: 0; }
 .selection-toolbar .text-button { font-size: 10px; }
 .track-header, .track-row { display: grid; grid-template-columns: 91px minmax(180px, 2fr) minmax(100px, 1.25fr) 75px 48px 32px; gap: 12px; align-items: center; }
 .track-header { color: var(--subtle); font-size: 10px; height: 38px; border-bottom: 1px solid var(--border); margin-bottom: 8px; padding: 0 10px; }
-.track-header > span:first-child { padding-left: 48px; }
+.track-header > span:first-child { padding-left: 24px; }
 .track-scroll { height: clamp(240px, calc(100dvh - 580px), 600px); min-height: 240px; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 .track-row { height: 63px; font-size: 11px; border-radius: 6px; padding: 0 10px; border: 1px solid transparent; }
 .track-row:hover { background: var(--surface); }
@@ -413,17 +413,16 @@ input[type=range] { height: 28px; }
   .selection-toolbar .text-button { padding: 6px 8px; }
   .track-header, .track-row { grid-template-columns: 44px minmax(0, 1fr) 38px 44px; gap: 4px; padding: 0; }
   .track-header { height: 32px; }
+  .track-header > span:first-child { padding-left: 0; text-align: center; }
   .track-row { height: 72px; }
   .track-format, .track-header > span:nth-child(4) { display: none; }
   .row-leading { gap: 0; }
-  .row-leading .row-number, .row-leading .drag-handle, .row-leading input { display: none; }
+  .row-leading .row-number, .row-leading input { display: none; }
   .row-leading .row-play { display: inline-flex; opacity: 1; width: 44px; height: 44px; }
   .track-row.selecting .row-leading .row-play { display: none; }
   .row-leading .selection-checkbox { display: none; }
-  .track-row.selecting:has(.drag-handle) { grid-template-columns: 88px minmax(0, 1fr) 38px 44px; }
   .track-row.selecting .row-leading .selection-checkbox { display: flex; width: 44px; height: 44px; flex-shrink: 0; }
   .track-row.selecting .row-leading input { display: block; opacity: 1; width: 20px; height: 20px; margin: 0; }
-  .track-row.selecting .row-leading .drag-handle { display: inline-flex; width: 44px; height: 44px; touch-action: none; }
   .track-title { gap: 6px; min-width: 0; }
   .track-title .artwork { display: none; }
   .track-title strong { font-size: 13px; }
@@ -574,7 +573,6 @@ dialog .guide-card { position: static; width: 100%; max-height: none; margin-top
   .ghost-button, .sidebar .forget, .sidebar .row-more, .transport-buttons > .icon-button, .transport-buttons .volume .icon-button, .sheet-controls .icon-button { width: 44px !important; height: 44px; }
   .browse-tools { grid-template-columns: minmax(0, 1fr) 44px 44px; }
   .track-header, .track-row { grid-template-columns: 44px minmax(0, 1fr) 34px 88px; }
-  .track-row.selecting:has(.drag-handle) { grid-template-columns: 88px minmax(0, 1fr) 34px 88px; }
   .track-action { flex-direction: row; }
   .track-action .icon-button.row-add, .track-action .icon-button.row-more { display: inline-flex; width: 44px; height: 44px; opacity: 1; }
   .track-action .warning { width: 44px; }

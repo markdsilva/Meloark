@@ -106,7 +106,6 @@
   .lyrics-empty { padding: 20px; }
   @container (max-width: 900px) {
     .track-header, .track-row { grid-template-columns: 44px minmax(0, 1fr) 34px 88px; }
-    .track-row.selecting:has(.drag-handle) { grid-template-columns: 88px minmax(0, 1fr) 34px 88px; }
   }
 }
 @media (prefers-reduced-motion: reduce) { .lyrics-panel, .lyrics-drawer.dialog { animation: none; } .lyric-line { transition: none; } }

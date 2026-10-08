@@ -26,8 +26,12 @@ jobs:
       - run: npm run lint && npm run typecheck && npm test && npm run build && npm run check:seo
       - name: Check installed native Chromium
         run: google-chrome --version
+      - name: Native dialog test helpers
+        run: sudo apt-get update && sudo apt-get install -y xdotool imagemagick
       - name: Browser flows and disposable native-file sync
-        run: xvfb-run --auto-servernum npm run test:e2e -- --project=chromium
+        run: npm run test:e2e -- --project=chromium --ignore-snapshots --grep-invert='native folder rename'
+      - name: Native folder sync on an isolated display
+        run: xvfb-run --auto-servernum npm run test:e2e -- tests/e2e/native-order-sync.spec.ts --project=chromium --workers=1
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -250,5 +250,9 @@ export async function recoverSync(libraryId = activeLibrary()?.id) {
       notify('Filename sync recovered and verified.')
     })
   } catch (error) { updateLibrary(libraryId, current => ({ ...current, syncRecovery: message(error) })); notify(message(error)) }
-  finally { running.delete(libraryId) }
+  finally {
+    running.delete(libraryId)
+    const current = useApp.getState().libraries.find(item => item.id === libraryId)
+    for (const session of Object.values(current?.sessions ?? {})) if (session.sync?.enabled && session.sync.status === 'queued') scheduleSync(libraryId, session.id)
+  }
 }

@@ -49,13 +49,7 @@ npx playwright install chromium
 npm run test:e2e -- --project=chromium
 ```
 
-Optional real native picker/rename acceptance test (creates and removes only generated temporary fixtures):
-
-```powershell
-$env:MELOARK_NATIVE_SYNC_TEST = "1"
-npm run test:e2e -- tests/e2e/native-order-sync.spec.ts --project=chromium
-Remove-Item Env:MELOARK_NATIVE_SYNC_TEST
-```
+The opt-in native picker test runs on an isolated Linux X11 display in cloud CI, using xdotool to select generated temporary files. It uses real directory/file handles and removes only its disposable fixture. Windows folder permissions and rename support should be checked manually with the steps above.
 
 The test branch's GitHub Actions workflow runs checks and Chromium flows, stores screenshots/traces, and never deploys the app or updates main. Unit fault tests are adapter tests; they do not themselves prove native Windows rename support.
 

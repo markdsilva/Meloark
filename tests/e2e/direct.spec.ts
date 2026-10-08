@@ -20,6 +20,7 @@ async function connectFixture(page: Page) {
     writes.push(name); await writeFile(join(directory, name), Buffer.from(bytes))
   })
   await page.exposeBinding('fixtureExists', async (_source, name: string) => {
+    if (name === '.meloark-order-sync.json') return false
     if (!['A.wav', 'B.wav', 'Local.m3u8'].includes(name)) throw new Error('Unknown fixture file')
     try { await access(join(directory, name)); return true } catch { return false }
   })

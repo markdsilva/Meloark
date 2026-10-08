@@ -1,5 +1,5 @@
 import { normalizeRelative } from '../../playlists/paths'
-import { verifiedWrite } from './saveProtocol'
+import { equalBytes, verifiedWrite, verifiedSyncWrite } from './saveProtocol'
 import { validatePlaylistDeletion, verifiedDelete } from './deleteProtocol'
 import { MAX_BYTES } from '../../playlists/codec'
 import type { DirectoryHandle, FileDescriptor, LibrarySource } from './types'
@@ -69,9 +69,9 @@ export class DirectSource implements LibrarySource {
   async writeSyncFile(path: string, bytes: Uint8Array, expected: Uint8Array | null) {
     if (path !== JOURNAL_PATH && !/\.m3u8?$/i.test(path)) throw new Error('Sync writes are limited to playlist references and the recovery journal.')
     if (normalizeRelative(path) !== path) throw new Error('Unsafe sync path.')
-    return this.writeChecked(path, bytes, expected)
+    return this.writeChecked(path, bytes, expected, true)
   }
-  private async writeChecked(path: string, bytes: Uint8Array, expected: Uint8Array | null) {
+  private async writeChecked(path: string, bytes: Uint8Array, expected: Uint8Array | null, sync = false) {
     if ((await this.getAccess()).write !== 'granted') throw new Error('Write permission is required.')
     const { directory, name } = await this.parent(path)
     const read = async () => {
@@ -82,7 +82,7 @@ export class DirectSource implements LibrarySource {
       }
       catch (error) { if (error instanceof DOMException && error.name === 'NotFoundError') return null; throw error }
     }
-    return verifiedWrite(path, bytes, expected, {
+    return (sync ? verifiedSyncWrite : verifiedWrite)(path, bytes, expected, {
       read,
       open: async () => {
         const handle = await directory.getFileHandle(name, { create: true })
@@ -112,7 +112,6 @@ export class DirectSource implements LibrarySource {
   async removeJournal(expected: Uint8Array) {
     const file = await this.readFresh(JOURNAL_PATH)
     if (!file) return
-    const { equalBytes } = await import('./saveProtocol')
     if (!equalBytes(new Uint8Array(await file.arrayBuffer()), expected)) throw new Error('The recovery journal changed. It was preserved.')
     await this.root.removeEntry(JOURNAL_PATH)
     if (await this.readFresh(JOURNAL_PATH)) throw new Error('Recovery journal removal could not be verified.')
