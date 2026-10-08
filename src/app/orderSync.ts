@@ -141,10 +141,15 @@ async function makeJournal(libraryId: string, sessionId: string, source: DirectS
   if (!library.connected || library.scanning || library.scanError || useApp.getState().busy) throw new Error('Wait for a complete scan and other file operations before syncing.')
   await assertOwnership(libraryId, sync.folder, sessionId)
   // Rescan the actual directory before every batch, not only remembered paths.
-  const files: string[] = []
-  for await (const file of source.scan(new AbortController().signal)) files.push(file.path)
+  const inventory = new Map<string, { size: number; lastModified: number }>()
+  for await (const file of source.scan(new AbortController().signal)) inventory.set(file.path, file)
+  const files = [...inventory.keys()]
   const knownAudio = new Set(Object.values(library.tracks).map(track => track.path))
-  if (files.some(path => dirname(path) === sync.folder && AUDIO_EXTENSIONS.has(extension(path)) && !knownAudio.has(path)) || Object.values(library.tracks).some(track => dirname(track.path) === sync.folder && !files.includes(track.path))) throw new Error('Audio files were added, removed or renamed outside Meloark. Disable sync and refresh to review the new inventory.')
+  if (files.some(path => dirname(path) === sync.folder && AUDIO_EXTENSIONS.has(extension(path)) && !knownAudio.has(path)) || Object.values(library.tracks).some(track => dirname(track.path) === sync.folder && !inventory.has(track.path))) throw new Error('Audio files were added, removed or renamed outside Meloark. Disable sync and refresh to review the new inventory.')
+  for (const track of Object.values(library.tracks).filter(track => dirname(track.path) === sync.folder)) {
+    const actual = inventory.get(track.path)!
+    if (actual.size !== track.size || actual.lastModified !== track.lastModified) throw new Error('An audio file changed outside Meloark. Disable sync and refresh to review it before renaming.')
+  }
   const token = newId(), moves = planNames(session.entries, library.tracks, sync.folder, sync.stems, files, token), mapping = new Map(moves.map(move => [move.source, move.target]))
   const paths = new Set(Object.values(library.tracks).map(track => track.path)), patches: SyncJournal['patches'] = []
   for (const path of files.filter(path => /\.m3u8?$/i.test(path))) {

@@ -45,6 +45,19 @@ beforeEach(() => {
 })
 afterEach(async () => { await persistNow(); sources.clear(); vi.restoreAllMocks() })
 describe('filename-sync app state', () => {
+  it('blocks externally changed audio before starting any native rename', async () => {
+    const t = fixture()
+    await createSyncedPlaylist('Both', '', 'both', ['t0', 't1', 't2']); await settled()
+    vi.mocked(t.source.moveFile).mockClear()
+    const path = '01 - Same.wav'
+    t.files.set(path, new NativeFile(['external recording edit'], path, { lastModified: 999 }) as unknown as File)
+    reorderEntries(new Set([activeSession()!.entries[0].id]), 3)
+    await vi.waitFor(() => expect(activeSession()?.sync?.status).toBe('error'))
+    expect(activeSession()?.sync?.error).toContain('audio file changed outside Meloark')
+    expect(t.source.moveFile).not.toHaveBeenCalled()
+    expect(t.files.has(JOURNAL_PATH)).toBe(false)
+    expect(await t.files.get(path)!.text()).toBe('external recording edit')
+  })
   it('owns no phantom M3U8 in filename-only mode and preserves stable IDs through Undo/Redo', async () => {
     const t = fixture()
     await createSyncedPlaylist('Folder order', '', 'filenames', ['t0', 't1', 't2'])

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { mkdtemp, readFile, writeFile, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { wavSample } from '../fixtures/audio'
@@ -13,29 +13,39 @@ const key = (...keys: string[]) => execute('xdotool', ['key', '--clearmodifiers'
 test('native folder rename, dependent playlists, sidecars, waiting playback and reload', async ({ playwright }, info) => {
   test.skip(info.project.name !== 'chromium' || process.platform !== 'linux' || process.env.MELOARK_NATIVE_SYNC_TEST !== '1', 'Opt-in Linux native picker test needs X11/xdotool and only uses disposable files; Windows acceptance is manual.')
   test.setTimeout(90000)
-  const directory = await mkdtemp(join(tmpdir(), 'meloark-native-sync-'))
+  const directory = await mkdtemp(join(homedir(), 'meloark-native-sync-'))
+  const profile = await mkdtemp(join(tmpdir(), 'meloark-native-profile-'))
   const audio = new Map(['Alpha', 'Beta', 'Gamma'].map((name, i) => [name, Buffer.from(wavSample(8 + i))]))
   for (const [name, bytes] of audio) await writeFile(join(directory, `${name}.wav`), bytes)
   await writeFile(join(directory, 'Alpha.lrc'), '[00:00]A local lyric\n')
   await writeFile(join(directory, 'Other.m3u8'), '#EXTM3U\r\n#keep this comment\r\nAlpha.wav\r\nAlpha.wav\r\nBeta.wav\r\n')
-  const browser = await playwright.chromium.launch({ executablePath: process.env.MELOARK_CHROMIUM_EXECUTABLE, headless: false })
+  const browser = await playwright.chromium.launchPersistentContext(profile, { executablePath: process.env.MELOARK_CHROMIUM_EXECUTABLE, headless: false, viewport: { width: 1440, height: 1000 } })
   try {
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors: string[] = []
+    const page = await browser.newPage(), errors: string[] = []
     page.on('pageerror', error => errors.push(error.message))
     await page.goto(info.project.use.baseURL!)
+    // Observe only; this still calls the real picker and returns its native handle.
+    await page.evaluate(() => {
+      const picker = window.showDirectoryPicker!.bind(window)
+      window.showDirectoryPicker = async options => {
+        try { const handle = await picker(options); console.log('Native picker selected:', handle.name); return handle }
+        catch (error) { console.log('Native picker failed:', String(error)); throw error }
+      }
+    })
+    page.on('console', entry => { if (entry.text().startsWith('Native picker')) console.log(entry.text()) })
     await page.getByRole('button', { name: 'Choose a music folder', exact: true }).click()
     let picker = ''
-    await expect.poll(async () => { picker = (await execute('xdotool', ['search', '--onlyvisible', '--name', 'Select|Open'])).stdout.trim().split('\n').at(-1)!; return picker }).not.toBe('')
+    await expect.poll(async () => { picker = (await execute('xdotool', ['search', '--onlyvisible', '--name', '^Open Files$|^Select Folder$'])).stdout.trim().split('\n').at(-1)!; return picker }).not.toBe('')
     await execute('xdotool', ['windowactivate', '--sync', picker])
     await execute('import', ['-window', 'root', 'test-results/native-picker.png'])
     await key('ctrl+l')
     await execute('xdotool', ['type', '--clearmodifiers', '--delay', '10', directory + '/'])
     await execute('import', ['-window', 'root', 'test-results/native-picker-path.png'])
-    await key('Return')
+    const geometry = (await execute('xdotool', ['getwindowgeometry', '--shell', picker])).stdout
+    const width = Number(geometry.match(/WIDTH=(\d+)/)![1]), height = Number(geometry.match(/HEIGHT=(\d+)/)![1])
+    await execute('xdotool', ['mousemove', '--window', picker, String(width - 50), String(height - 25), 'click', '1'])
     await page.waitForTimeout(500)
     await execute('import', ['-window', 'root', 'test-results/native-picker-after-path.png'])
-    const windows = (await execute('xdotool', ['search', '--onlyvisible', '--name', 'Select|Open']).catch(() => ({ stdout: '' }))).stdout.trim()
-    if (windows) await key('alt+o')
     await page.waitForTimeout(500)
     await execute('import', ['-window', 'root', 'test-results/native-read-permission.png'])
     await key('Tab', 'Return')
@@ -94,5 +104,5 @@ test('native folder rename, dependent playlists, sidecars, waiting playback and 
     console.log('Native visible windows:', (await execute('xdotool', ['search', '--onlyvisible', '--name', '.'])).stdout)
     await execute('import', ['-window', 'root', 'test-results/native-display-failure.png']).catch(() => undefined)
     throw error
-  } finally { await browser.close(); await rm(directory, { recursive: true, force: true }) }
+  } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); await rm(profile, { recursive: true, force: true }) }
 })

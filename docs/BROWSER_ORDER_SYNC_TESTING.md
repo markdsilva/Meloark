@@ -68,6 +68,7 @@ The test branch's GitHub Actions workflow runs checks and Chromium flows, stores
 - One complete audio folder and one order authority per folder. Membership edits become available after disabling sync; this never deletes audio.
 - No native move API, denied access, unsupported filesystems, ambiguous references or unsafe names cause a clear block. There is no copy/delete fallback.
 - The recovery protocol is resumable, not an atomic filesystem transaction. App-origin Web Locks cannot lock out Explorer, tag editors, cloud-sync clients or another application.
+- Use one Meloark tab for the test folder. Web Locks serialize batches across tabs, but separate tabs do not share live playlist edits or selection state.
 - File identity checks use exact journal paths and stable IDs plus size, modification time and bounded head/tail fingerprints. They do not deduplicate identical recordings, and they cannot detect a deliberately changed middle section with unchanged metadata. Avoid concurrent external edits.
 - Only playlists inside the granted library and matching same-folder `.lrc` sidecars are repaired. External playlists and other sidecar types are outside this branch's scope.
 - Browser storage eviction or manually deleting recovery data can remove the remembered session/track identity needed for automated recovery. Keep the copied test folder until acceptance is complete.
