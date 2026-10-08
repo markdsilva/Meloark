@@ -4,7 +4,7 @@ import { FileMusic, ListOrdered } from 'lucide-react'
 import { analyzeIndexes } from '../../domain/filenameIndex'
 import { createPlaylist, loadPlaylist, message, playlistNameError, useApp } from '../../app/store'
 import { createSyncedPlaylist } from '../../app/orderSync'
-import { dirname, naturalCompare } from '../../domain/models'
+import { dirname, filename, naturalCompare } from '../../domain/models'
 import { filenameStem, planNames } from '../../domain/orderSync'
 import { Dialog } from '../shared/Dialog'
 
@@ -50,7 +50,7 @@ export function CreatePlaylist({ close }: { close: () => void }) {
       ['both', 'Numbered filenames + M3U8', 'Keep filenames and a dedicated M3U8 in the same order.'],
     ] as const).map(([value, label, description]) => <label key={value}><input type="radio" name="storage-mode" checked={storage === value} disabled={working || value !== 'm3u8' && (library.kind !== 'direct' || !navigator.locks)} onChange={() => { setStorage(value); setConfirmed(false); setError(undefined); setAuthority('') }} /><span><strong>{label}</strong><small>{description}</small></span></label>)}</fieldset>
     {library.kind !== 'direct' && <p className="muted">Filename sync requires a direct-access folder in a desktop Chromium browser.</p>}
-    <label className="field">Playlist name<input ref={nameInput} value={name} aria-invalid={!!error} aria-describedby={error ? 'playlist-name-error' : undefined} onChange={event => { setName(event.target.value); setError(undefined) }} autoFocus placeholder="My playlist" /></label>
+    <label className="field">{storage === 'both' && authority ? 'Order-authority playlist' : 'Playlist name'}<input ref={nameInput} value={storage === 'both' && authority ? filename(authority) : name} readOnly={storage === 'both' && !!authority} aria-invalid={!!error} aria-describedby={error ? 'playlist-name-error' : undefined} onChange={event => { setName(event.target.value); setError(undefined) }} autoFocus placeholder="My playlist" /></label>
     {error && <div id="playlist-name-error" className="field-error" role="alert"><p>{error}</p>{error.includes('already exists') && <button className="text-button" onClick={() => { let index = 2; let next = `${name.replace(/\.m3u8$/i, '')} ${index}`; while (playlistNameError(next, library)?.includes('already exists')) next = `${name.replace(/\.m3u8$/i, '')} ${++index}`; setName(next); setError(undefined); nameInput.current?.focus() }}>Use an available name</button>}</div>}
     {storage === 'm3u8' && <div className="mode-options">
       <label className={mode === 'empty' ? 'chosen' : ''}><input type="radio" name="initial-order" checked={mode === 'empty'} onChange={() => setMode('empty')} /><FileMusic /><span><strong>Start empty</strong><small>Add tracks from your library</small></span></label>
