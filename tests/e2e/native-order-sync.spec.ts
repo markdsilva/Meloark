@@ -35,7 +35,10 @@ test('native folder rename, dependent playlists, sidecars, waiting playback and 
     page.on('console', entry => { if (entry.text().startsWith('Native picker')) console.log(entry.text()) })
     await page.getByRole('button', { name: 'Choose a music folder', exact: true }).click()
     let picker = ''
-    await expect.poll(async () => { picker = (await execute('xdotool', ['search', '--onlyvisible', '--name', '^Open Files$|^Select Folder$'])).stdout.trim().split('\n').at(-1)!; return picker }).not.toBe('')
+    await expect.poll(async () => {
+      picker = (await execute('xdotool', ['search', '--onlyvisible', '--name', '^Select a folder this site can view$']).catch(() => ({ stdout: '' }))).stdout.trim().split('\n').at(-1) ?? ''
+      return picker
+    }).not.toBe('')
     await execute('xdotool', ['windowactivate', '--sync', picker])
     await execute('import', ['-window', 'root', 'test-results/native-picker.png'])
     await key('ctrl+l')
