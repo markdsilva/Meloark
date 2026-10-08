@@ -49,6 +49,8 @@ Use a **copy** of a small music folder for the first test. Include three or more
 
 ## Automated checks
 
+Cloud acceptance [run 37750763051](https://github.com/markdsilva/Meloark/actions/runs/37750763051) passed 184 unit tests, 42 browser flows, the native folder test and the production-bundle smoke test. The native check used unmodified Google Chrome 154.0.8037.97 on Linux, a disposable browser profile and generated audio files. It verified unchanged audio bytes, drag ordering, dependent M3U8 references, LRC renaming, Undo, paused playback/seek, Stop & sync and reload with stable track IDs. Windows filesystem acceptance remains the manual preview test above.
+
 ```powershell
 npm run lint
 npm run typecheck
