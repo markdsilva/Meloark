@@ -48,10 +48,11 @@ export async function readJournal(disk: SyncDisk) {
 export async function prepareJournal(disk: SyncDisk, journal: Omit<SyncJournal, 'phase' | 'moves'> & { moves: RenameIntent[] }): Promise<SyncJournal> {
   if (await disk.readFresh(JOURNAL_PATH)) throw new Error('An unfinished filename sync needs recovery before another batch can start.')
   const moves: SyncMove[] = []
+  const sourceKeys = new Set(journal.moves.map(move => syncKey(move.source)))
   for (const intent of journal.moves) {
     const file = await disk.readFresh(intent.source)
     if (!file || await disk.readFresh(intent.temporary)) throw new Error(`The inventory changed before sync: ${intent.source}`)
-    if (!journal.moves.some(move => syncKey(move.source) === syncKey(intent.target)) && await disk.readFresh(intent.target)) throw new Error(`A target is occupied: ${intent.target}`)
+    if (!sourceKeys.has(syncKey(intent.target)) && await disk.readFresh(intent.target)) throw new Error(`A target is occupied: ${intent.target}`)
     moves.push({ ...intent, fingerprint: await fingerprint(file) })
   }
   const result: SyncJournal = { ...journal, phase: 'staging', moves }

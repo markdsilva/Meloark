@@ -22,6 +22,7 @@ export interface Library {
   scanError?: string
   hiddenPlaylists?: string[]
   syncRecovery?: string
+  syncAppliedToken?: string
 }
 interface AppState {
   libraries: Library[]; activeLibrary?: string; view: 'library' | 'playlist' | 'albums'

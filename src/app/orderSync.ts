@@ -1,5 +1,5 @@
 import { activeLibrary, activeSession, message, notify, persistNow, sources, updateLibrary, useApp } from './store'
-import { dirname, filename, newId, naturalCompare, isDirty, type PlaylistEntry, type PlaylistSession } from '../domain/models'
+import { AUDIO_EXTENSIONS, extension, dirname, filename, newId, naturalCompare, isDirty, type PlaylistEntry, type PlaylistSession } from '../domain/models'
 import { filenameStem, inFolder, patchReferences, planNames, validFilename } from '../domain/orderSync'
 import { emptyDocument, MAX_BYTES, serializePlaylist } from '../playlists/codec'
 import { relativeReference } from '../playlists/paths'
@@ -37,7 +37,7 @@ export function scheduleSync(libraryId: string, sessionId: string) {
   const library = useApp.getState().libraries.find(item => item.id === libraryId), session = library?.sessions[sessionId]
   if (!session?.sync?.enabled || session.sync.status === 'error' || session.sync.status === 'recovery') return
   if (!isDirty(session)) return
-  if (!running.has(libraryId)) setSync(libraryId, sessionId, 'queued')
+  if (!running.has(libraryId) || session.sync.status !== 'syncing') setSync(libraryId, sessionId, 'queued')
   clearTimeout(timers.get(libraryId))
   timers.set(libraryId, setTimeout(() => { timers.delete(libraryId); void runSync(libraryId, sessionId) }, 350))
 }
@@ -144,7 +144,6 @@ async function makeJournal(libraryId: string, sessionId: string, source: DirectS
   const files: string[] = []
   for await (const file of source.scan(new AbortController().signal)) files.push(file.path)
   const knownAudio = new Set(Object.values(library.tracks).map(track => track.path))
-  const { AUDIO_EXTENSIONS, extension } = await import('../domain/models')
   if (files.some(path => dirname(path) === sync.folder && AUDIO_EXTENSIONS.has(extension(path)) && !knownAudio.has(path)) || Object.values(library.tracks).some(track => dirname(track.path) === sync.folder && !files.includes(track.path))) throw new Error('Audio files were added, removed or renamed outside Meloark. Disable sync and refresh to review the new inventory.')
   const token = newId(), moves = planNames(session.entries, library.tracks, sync.folder, sync.stems, files, token), mapping = new Map(moves.map(move => [move.source, move.target]))
   const paths = new Set(Object.values(library.tracks).map(track => track.path)), patches: SyncJournal['patches'] = []
@@ -182,6 +181,10 @@ async function commitJournal(journal: SyncJournal, source: DirectSource) {
   const stats = new Map<string, File>()
   for (const move of journal.moves.filter(item => item.trackId)) stats.set(move.trackId!, (await source.readFresh(move.target))!)
   updateLibrary(journal.libraryId, library => {
+    // Cache commit can succeed before journal cleanup fails. A retry after
+    // reload must not apply a swap mapping to the stable identities twice.
+    if (library.syncAppliedToken === journal.token) return { ...library, syncRecovery: undefined,
+      sessions: Object.fromEntries(Object.entries(library.sessions).map(([id, session]) => [id, id === journal.sessionId && session.sync ? { ...session, sync: { ...session.sync, status: isDirty(session) ? 'queued' as const : 'synced' as const, error: undefined } } : session])) }
     const tracks = Object.fromEntries(Object.entries(library.tracks).map(([id, track]) => {
       const path = mapping.get(track.path), file = stats.get(id)
       return [id, path ? { ...track, path, filename: filename(path), index: Number(filename(path).match(/^\d+/)?.[0]), size: file?.size ?? track.size, lastModified: file?.lastModified ?? track.lastModified } : track]
@@ -201,7 +204,7 @@ async function commitJournal(journal: SyncJournal, source: DirectSource) {
       }
       return [id, next]
     }))
-    return { ...library, tracks, sessions, syncRecovery: undefined, files: [...new Set([...library.files.map(path => mapping.get(path) ?? path), ...journal.patches.map(patch => patch.path)])], playlists: [...new Set([...library.playlists, ...journal.patches.map(patch => patch.path)])].sort(naturalCompare) }
+    return { ...library, tracks, sessions, syncAppliedToken: journal.token, syncRecovery: undefined, files: [...new Set([...library.files.map(path => mapping.get(path) ?? path), ...journal.patches.map(patch => patch.path)])], playlists: [...new Set([...library.playlists, ...journal.patches.map(patch => patch.path)])].sort(naturalCompare) }
   })
   source.resetHandles()
   await persistNow(true)

@@ -29,9 +29,9 @@ jobs:
       - name: Native dialog test helpers
         run: sudo apt-get update && sudo apt-get install -y xdotool imagemagick
       - name: Browser flows and disposable native-file sync
-        run: npm run test:e2e -- --project=chromium --ignore-snapshots --grep-invert='native folder rename'
+        run: npm run test:e2e -- --project=chromium --grep-invert='native folder rename' --output=test-results/browser
       - name: Native folder sync on an isolated display
-        run: xvfb-run --auto-servernum npm run test:e2e -- tests/e2e/native-order-sync.spec.ts --project=chromium --workers=1
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1200x24' npm run test:e2e -- tests/e2e/native-order-sync.spec.ts --project=chromium --workers=1 --output=test-results/native
       - uses: actions/upload-artifact@v4
         if: always()
         with:
