@@ -51,10 +51,20 @@ export interface PlaylistDocument {
   inspected: boolean
 }
 export interface HistoryCommand { before: PlaylistEntry[]; after: PlaylistEntry[]; label: string }
+export interface OrderSync {
+  mode: 'filenames' | 'both'
+  folder: string
+  enabled: boolean
+  status: 'queued' | 'syncing' | 'synced' | 'paused' | 'waiting' | 'error' | 'recovery'
+  committedRevision: number
+  stems: Record<string, string>
+  error?: string
+}
 export interface PlaylistSession {
   id: string
   name: string
-  document: PlaylistDocument
+  document?: PlaylistDocument
+  sync?: OrderSync
   entries: PlaylistEntry[]
   saved: PlaylistEntry[]
   baseline: Uint8Array | null
@@ -79,4 +89,4 @@ export const filename = (path: string) => path.split('/').at(-1) ?? path
 export const dirname = (path: string) => path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
 export const naturalCompare = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true }) || (a < b ? -1 : a > b ? 1 : 0)
 export const entrySignature = (entries: PlaylistEntry[]) => JSON.stringify(entries.map(e => [e.id, e.path, e.raw, e.prelude]))
-export const isDirty = (session: PlaylistSession) => session.baseline === null || entrySignature(session.entries) !== entrySignature(session.saved)
+export const isDirty = (session: PlaylistSession) => session.sync ? entrySignature(session.entries) !== entrySignature(session.saved) || session.sync.committedRevision < 0 : session.baseline === null || entrySignature(session.entries) !== entrySignature(session.saved)

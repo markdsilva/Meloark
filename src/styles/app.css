@@ -142,8 +142,16 @@ h1, h2, h3, p { margin-top: 0; }
 .row-leading { display: flex; align-items: center; gap: 7px; position: relative; }
 .row-leading input { width: 12px; height: 12px; margin: 0; opacity: .7; }
 .track-row.selected input, .track-row:hover input, .row-leading input:focus-visible { opacity: 1; }
-.drag-handle { color: var(--subtle); padding: 3px 0; cursor: grab; touch-action: none; width: 15px; }
-.drag-handle:active { cursor: grabbing; }
+.track-row.reorderable { cursor: grab; }
+.track-row.reorderable:active { cursor: grabbing; }
+.track-row.touch-reorder { touch-action: none; }
+.sync-options { border: 0; padding: 0; margin: 0 0 18px; }
+.sync-options legend { font-weight: 600; margin-bottom: 10px; }
+.sync-options label { display: flex; gap: 10px; padding: 10px 0; align-items: flex-start; }
+.sync-options small, .sync-preview small { display: block; color: var(--subtle); margin-top: 4px; }
+.sync-preview { max-height: 230px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; margin: 12px 0; position: relative; }
+.sync-preview > div > div { display: flex; gap: 12px; padding: 8px 12px; font-size: 11px; border-bottom: 1px solid var(--border); overflow: hidden; }
+.sync-preview > div > div > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-number { color: var(--subtle); min-width: 20px; text-align: right; font-variant-numeric: tabular-nums; }
 .row-number.active { color: var(--accent-text); }
 .row-play { margin-left: auto; width: 24px; opacity: 0; }

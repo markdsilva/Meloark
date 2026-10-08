@@ -31,7 +31,7 @@ Meloark combines **melody** and **ark** — a home for your music collection. Pl
 | **Follow the words.**<br />Use local LRC lyrics, seek by line, and optionally look up a recording on LRCLIB. | **Look a little closer.**<br />Inspect codec details, sample rate, and live source bitrate for supported formats. | **Keep control.**<br />Use permission-based folder access or portable file selection, with your audio kept on your device. |
 
 > [!NOTE]
-> **Your collection stays local.** Playlist edits never rename or delete your music. Online lyrics are optional and send recording details to LRCLIB only after you enable lookup.
+> **Your collection stays local.** M3U8-only edits leave audio filenames unchanged. Optional filename sync renumbers a complete audio folder; audio files are never deleted. Online lyrics are optional and send recording details to LRCLIB only after you enable lookup.
 
 ## Get started in a minute
 
@@ -58,7 +58,7 @@ Expand the sections below for browser behavior, lyrics, playlist safety, develop
 1. Choose a music folder. Its subfolders are scanned recursively. Portable folder and multiple-file selection are available when direct access is unavailable.
 2. Press a track's **Play** button to listen immediately, even without a playlist. Open an existing M3U/M3U8 from the sidebar, or create a playlist when you want to save an order. A single visible discovered playlist is opened automatically. Scanning never adds discovered tracks to an existing playlist.
 3. In **All tracks**, use Add, Add & Play, or multi-selection to add tracks. Albums and folder/artist filters help browse your collection.
-4. In **Playlist**, select with checkboxes, Ctrl/Cmd-click, or Shift-click. Drag a handle to move the selected group. Move up/down buttons and Alt+Arrow keys provide keyboard reordering. Clear filters and select playlist order before reordering.
+4. In **Playlist**, select with checkboxes, Ctrl/Cmd-click, or Shift-click. Drag anywhere on a row to move the selected group. Alt+Arrow keys and track context menus provide alternative reordering. Clear filters and select playlist order before reordering.
 5. Undo/redo operates on the draft. Removing a track removes only its playlist occurrence. Repeated tracks are preserved as distinct occurrences.
 6. **Save playlist** requests write permission, checks for external changes, writes, closes, and verifies the M3U8. **Export** requests a download and does not update the original.
 
@@ -70,7 +70,19 @@ New visitors can start or skip a short guided tour. Restart it from the Help/bro
 
 Playlist menus offer **Remove from app** or **Discard draft**, with confirmation before losing unsaved edits/history. On-disk playlists removed from the app stay hidden across Refresh/reload; **Manage playlists** restores them. In direct mode, **Delete playlist file** requires explicit confirmation and write permission. It targets only the named M3U/M3U8, checks its expected bytes, deletes non-recursively, and verifies absence. Deletion is permanent and outside edit undo. Portable mode uses your file manager for physical deletion. Legacy M3U sources and imported M3U8 drafts are separate targets. Audio files are never deleted.
 
-Collapse the desktop sidebar into an icon rail; its preference survives reopening. Below 768 px, navigation opens in a modal drawer. On phones, expand the compact player for the complete transport, volume, and audio details. Player sheets do not replace the native audio element or restart playback. Use **Select tracks** for touch selection, then drag a handle after holding it briefly, or use Move up/down. Track actions offer explicit Add and Add & Play.
+Collapse the desktop sidebar into an icon rail; its preference survives reopening. Below 768 px, navigation opens in a modal drawer. On phones, expand the compact player for the complete transport, volume, and audio details. Player sheets do not replace the native audio element or restart playback. Use **Select tracks** for touch selection, then enable **Reorder tracks** and hold a row briefly before dragging. Turn reordering off to scroll normally. Track actions offer explicit Add and Add & Play for ordinary playlists.
+
+### Filename order sync (test branch)
+
+New playlist offers **M3U8 only** (the default), **Numbered filenames only**, and **Numbered filenames + M3U8**. Filename modes require a direct-access folder, Web Locks and a successful disposable native rename test. Choose one complete audio folder and review the initial order; combined mode can instead use a fully resolved existing M3U8 as its order authority. Subsets, duplicate occurrences and multi-folder playlists remain ordinary playlists.
+
+Dragging, Undo and Redo automatically queue filename changes such as `01 - Song.mp3`. Existing titles/extensions remain intact. Matching `.lrc` sidecars follow their audio files. Accessible `.m3u`/`.m3u8` references are repaired while preserving comments, encodings, duplicate occurrences and playlist order. References outside the granted library cannot be repaired.
+
+Sync uses native in-folder moves with temporary names, checked writes, browser-cache recovery data and `.meloark-order-sync.json` on disk. An interrupted batch stops further writes until recovery. It never implements renaming by copying and deleting audio. External applications must not edit the folder during a batch; the browser API cannot provide a transaction across audio renames and playlist writes.
+
+Disk changes wait until playback is stopped, including paused playback, to protect the current browser file snapshot. **Stop & sync** releases it. Sync settings can pause, retry or disable sync. Playlist membership controls are disabled while filename sync owns the complete folder. Normal M3U8 drafts and portable Export remain available.
+
+See [Windows test instructions](docs/BROWSER_ORDER_SYNC_TESTING.md) before using this branch with copied music.
 
 ### Synchronized lyrics
 

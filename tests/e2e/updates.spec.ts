@@ -77,7 +77,7 @@ test('mobile navigation, group editing, and expanded player share transport stat
   await page.getByRole('button', { name: 'Select tracks', exact: true }).click()
   await page.getByRole('checkbox', { name: 'Select First', exact: true }).check()
   await page.getByRole('checkbox', { name: 'Select Second', exact: true }).check()
-  await page.getByRole('button', { name: 'Move down', exact: true }).click()
+  await page.getByRole('row').filter({ has: page.getByRole('checkbox', { name: 'Select First', exact: true }) }).press('Alt+ArrowDown')
   await expect(page.locator('.track-title strong')).toHaveText(['Third', 'First', 'Second'])
   await page.getByRole('button', { name: 'Undo', exact: true }).click()
   await expect(page.locator('.track-title strong')).toHaveText(['First', 'Second', 'Third'])

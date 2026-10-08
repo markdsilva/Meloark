@@ -22,8 +22,8 @@ const steps = [
   { title: 'Try playing a track', text: 'Use a track’s Play button. Listening does not require a playlist and does not add tracks to one.', target: 'tracks' },
   { title: 'Create a playlist draft', text: 'Choose New playlist. Start empty or review the numbered filenames. Creating a draft does not change any file.', target: 'create' },
   { title: 'Add your favorites', text: 'Open All tracks and use + or the track menu to add music. Add & Play adds it and starts playback.', target: 'tabs' },
-  { title: 'Make the order yours', text: 'In Playlist order, drag the handles or select tracks and use Move up/down. Undo restores playlist edits, never deleted files.', target: 'tracks' },
-  { title: 'Save or export', text: 'Direct mode saves after permission and verification. Portable mode exports a download to place in your music folder. Edits stay in your draft until then.', target: 'save' },
+  { title: 'Make the order yours', text: 'In Playlist order, drag anywhere on a track row, or select tracks and press Alt+Arrow up/down. Touch devices have a Reorder tracks mode. Undo restores the previous order.', target: 'tracks' },
+  { title: 'Save or sync', text: 'M3U8-only edits stay in your draft until Save or Export. Opt-in filename sync updates the complete folder automatically after playback stops. Sync settings can pause, retry or disable it.', target: 'save' },
 ]
 export function Guide() {
   const { active, step } = useGuide()

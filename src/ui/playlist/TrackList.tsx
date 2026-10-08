@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type KeyboardEvent } from 'react'
 import { DragDropProvider, DragOverlay, useDraggable, useDroppable } from '@dnd-kit/react'
+import { PointerSensor, PointerActivationConstraints } from '@dnd-kit/dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowDown, ArrowUp, Clock3, GripVertical, Music2, MoreHorizontal, Pause, Play, Plus, Trash2, TriangleAlert } from 'lucide-react'
+import { Clock3, GripVertical, Music2, MoreHorizontal, Pause, Play, Plus, Trash2, TriangleAlert } from 'lucide-react'
 import { addTracks, playLibraryTrack, playPlaylistEntry, removeEntries, reorderEntries, useApp } from '../../app/store'
 import { naturalCompare, type PlaylistEntry, type Track } from '../../domain/models'
 import { player, usePlayer } from '../../playback/player'
@@ -15,10 +16,15 @@ import { audioSummary } from '../../metadata/technical'
 import { Menu, menuAnchor, type MenuAnchor, type MenuAction } from '../shared/Menu'
 
 interface RowData { id: string; trackId?: string; entry?: PlaylistEntry }
-function TrackRow({ row, index, selected, selectable, reorderable, selecting, onSelect, onResolve, onDetails, onPlay, onMenu }: {
+const sensors = [PointerSensor.configure({
+  activationConstraints: event => event.pointerType === 'touch' ? [new PointerActivationConstraints.Delay({ value: 250, tolerance: 5 })] : [new PointerActivationConstraints.Distance({ value: 8 })],
+  preventActivation: (event, source) => event.button !== 0 || (event.target instanceof Element && !!event.target.closest('button, input, label, select, textarea, a, [role="button"], [contenteditable="true"]')) || (event.pointerType === 'touch' && source.element?.getAttribute('data-touch-reorder') !== 'true'),
+})]
+function TrackRow({ row, index, selected, selectable, reorderable, selecting, touchReorder, suppressClick, onSelect, onResolve, onDetails, onPlay, onMenu }: {
   row: RowData; index: number; selected: boolean; selectable: boolean; reorderable: boolean
   onSelect: (event: MouseEvent | KeyboardEvent, index: number) => void; onResolve: (entry: PlaylistEntry) => void
   selecting: boolean; onDetails: (track: Track) => void
+  touchReorder: boolean; suppressClick: () => boolean
   onPlay: (row: RowData) => void; onMenu: (row: RowData, anchor: MenuAnchor) => void
 }) {
   const track = useApp(s => {
@@ -28,7 +34,7 @@ function TrackRow({ row, index, selected, selectable, reorderable, selecting, on
   const busy = useApp(s => s.busy)
   const connected = useApp(s => s.libraries.find(l => l.id === s.activeLibrary)?.connected ?? false)
   const current = usePlayer(s => s.current), playing = usePlayer(s => s.playing)
-  const canAdd = useApp(s => { const library = s.libraries.find(item => item.id === s.activeLibrary); const session = library?.activePlaylist ? library.sessions[library.activePlaylist] : undefined; return !!session && !s.busy && session.status !== 'unverified' })
+  const canAdd = useApp(s => { const library = s.libraries.find(item => item.id === s.activeLibrary); const session = library?.activePlaylist ? library.sessions[library.activePlaylist] : undefined; return !!session && !session.sync && !s.busy && session.status !== 'unverified' })
   // Keep library row controls independent of drag accessibility attributes.
   // The domain controls order; no optimistic plugin may rearrange React's DOM.
   const drag = useDraggable({ id: row.id, disabled: !reorderable || busy, data: { index } })
@@ -41,17 +47,17 @@ function TrackRow({ row, index, selected, selectable, reorderable, selecting, on
     if (!canPlay) return
     if (isCurrent) void player.toggle(); else onPlay(row)
   }
-  return <div ref={reorderable ? drop.ref : undefined} role="row" aria-rowindex={index + 2} aria-selected={selected} tabIndex={0}
-    className={`track-row ${selecting ? 'selecting' : ''} ${selected ? 'selected' : ''} ${isCurrent ? 'current' : ''} ${drag.isDragSource ? 'dragging' : ''} ${drop.isDropTarget ? 'drop-target' : ''}`}
+  return <div ref={element => { drag.ref(reorderable ? element : null); drop.ref(reorderable ? element : null) }} role="row" aria-rowindex={index + 2} aria-selected={selected} tabIndex={0}
+    data-touch-reorder={touchReorder} aria-description={reorderable ? 'Drag this row to reorder. Alt+Arrow up or down also moves selected tracks.' : undefined}
+    className={`track-row ${reorderable ? 'reorderable' : ''} ${touchReorder ? 'touch-reorder' : ''} ${selecting ? 'selecting' : ''} ${selected ? 'selected' : ''} ${isCurrent ? 'current' : ''} ${drag.isDragSource ? 'dragging' : ''} ${drop.isDropTarget ? 'drop-target' : ''}`}
     onContextMenu={event => { event.preventDefault(); onMenu(row, menuAnchor(event.currentTarget, event.clientX, event.clientY)) }}
-    onClick={event => onSelect(event, index)} onDoubleClick={activate} onKeyDown={event => {
+    onClick={event => { if (!suppressClick()) onSelect(event, index) }} onDoubleClick={() => { if (!suppressClick()) activate() }} onKeyDown={event => {
       if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); event.stopPropagation(); onMenu(row, menuAnchor(event.currentTarget)); return }
       if (event.target !== event.currentTarget) return
       if (event.key === 'Enter') { event.preventDefault(); activate() }
       if (event.key === ' ') { event.preventDefault(); onSelect(event, index) }
     }}>
     <div role="gridcell" className="row-leading">
-      {reorderable && <button ref={drag.ref} className="drag-handle" aria-label={`Reorder ${title}`} disabled={busy} onClick={event => event.stopPropagation()}><GripVertical size={15} /></button>}
       <label className="selection-checkbox" onClick={event => event.stopPropagation()}><input type="checkbox" aria-label={`Select ${title}`} checked={selected} disabled={!selectable || busy} onClick={event => { event.stopPropagation(); onSelect(event, index) }} onChange={() => {}} /></label>
       <span className={`row-number ${isCurrent ? 'active' : ''}`}>{isCurrent && playing ? <span className="equalizer"><i /><i /><i /></span> : index + 1}</span>
       <button className="row-play icon-button" disabled={!canPlay} aria-label={`Play ${title}`} data-tooltip={canPlay ? `Play ${title}${row.entry ? '' : ' without adding to a playlist'}` : 'Reconnect the library or choose a supported track'} onClick={event => { event.stopPropagation(); activate() }}>{isCurrent && playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}</button>
@@ -69,15 +75,17 @@ function TrackRow({ row, index, selected, selectable, reorderable, selecting, on
 export function TrackList({ query, folder, artist, sortBy, playlist }: { query: string; folder: string; artist: string; sortBy: string; playlist: boolean }) {
   const library = useApp(s => s.libraries.find(l => l.id === s.activeLibrary))
   const session = library?.activePlaylist ? library.sessions[library.activePlaylist] : undefined
-  const busy = useApp(s => s.busy) || playlist && session?.status === 'unverified'
+  const busy = useApp(s => s.busy) || !!library?.syncRecovery || playlist && session?.status === 'unverified'
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [resolve, setResolve] = useState<PlaylistEntry>()
   const [details, setDetails] = useState<Track>()
   const [selecting, setSelecting] = useState(false)
+  const [touchReorder, setTouchReorder] = useState(false)
   const mobile = useMediaQuery('(max-width: 767px)')
   const [dragCount, setDragCount] = useState(0)
   const [menu, setMenu] = useState<{ rowId: string; ids: Set<string>; anchor: MenuAnchor }>()
   const anchor = useRef(0), parent = useRef<HTMLDivElement>(null)
+  const dragSelection = useRef(new Set<string>()), clickAfter = useRef(0)
   const inventoryKey = JSON.stringify(Object.keys(library?.tracks ?? {}))
   const sourceRows = useMemo<RowData[]>(() => playlist ? session?.entries.map(entry => ({ id: entry.id, trackId: entry.trackId, entry })) ?? [] : Object.values(library?.tracks ?? {}).sort((a, b) => naturalCompare(a.path, b.path)).map(track => ({ id: track.id, trackId: track.id })), [playlist, session?.entries, inventoryKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const rows = useMemo(() => {
@@ -119,13 +127,13 @@ export function TrackList({ query, folder, artist, sortBy, playlist }: { query: 
   const menuItems: MenuAction[] = menuRow && menu ? [
     { label: 'Play', run: () => play(menuRow), disabled: !canPlay, reason: 'Reconnect or choose a supported track' },
     ...(playlist ? [
-      { label: 'Remove from playlist', run: () => removeEntries(menu.ids), disabled: !editable, danger: true },
+      { label: 'Remove from playlist', run: () => removeEntries(menu.ids), disabled: !editable || !!session?.sync, reason: 'Disable filename sync to edit playlist membership', danger: true },
       { label: 'Move up', run: () => move(-1), disabled: !editable || !reorderable, reason: 'Choose unfiltered playlist order' },
       { label: 'Move down', run: () => move(1), disabled: !editable || !reorderable, reason: 'Choose unfiltered playlist order' },
       ...(menuRow.entry?.issue ? [{ label: 'Resolve reference', run: () => setResolve(menuRow.entry) }] : []),
     ] : [
-      { label: 'Add to playlist', run: () => addTracks([...menu.ids]), disabled: !editable, reason: 'Create or open an editable playlist first' },
-      { label: 'Add & Play', run: () => addTracks([menuRow.trackId!, ...[...menu.ids].filter(id => id !== menuRow.trackId)], true), disabled: !editable || !canPlay, reason: 'Create or open an editable playlist first' },
+      { label: 'Add to playlist', run: () => addTracks([...menu.ids]), disabled: !editable || !!session?.sync, reason: 'Create or open an editable playlist first' },
+      { label: 'Add & Play', run: () => addTracks([menuRow.trackId!, ...[...menu.ids].filter(id => id !== menuRow.trackId)], true), disabled: !editable || !!session?.sync || !canPlay, reason: 'Create or open an editable playlist first' },
     ]),
     { label: 'Audio details', run: () => { if (menuTrack) setDetails(menuTrack) }, disabled: !menuTrack },
   ] : []
@@ -149,10 +157,10 @@ export function TrackList({ query, folder, artist, sortBy, playlist }: { query: 
     <div className="selection-toolbar">
       <span>{validSelected.size ? `${validSelected.size} selected` : `${rows.length.toLocaleString()} ${query || folder || artist ? 'matching ' : ''}tracks`}</span>
       {mobile && <button className={`text-button toggle-button ${selecting ? 'active' : ''}`} aria-pressed={selecting} onClick={() => { setSelecting(!selecting); if (selecting) setSelected(new Set()) }}>{selecting ? 'Done selecting' : 'Select tracks'}</button>}
+      {mobile && reorderable && <button className={`text-button toggle-button ${touchReorder ? 'active' : ''}`} aria-pressed={touchReorder} onClick={() => setTouchReorder(!touchReorder)}>{touchReorder ? 'Done reordering' : 'Reorder tracks'}</button>}
       {validSelected.size > 0 && <div>{playlist ? <>
-        <button className="text-button" disabled={!reorderable || busy} onClick={() => move(-1)}><ArrowUp size={15} />Move up</button><button className="text-button" disabled={!reorderable || busy} onClick={() => move(1)}><ArrowDown size={15} />Move down</button>
-        <button className="text-button" disabled={busy} onClick={() => removeEntries(validSelected)}><Trash2 size={15} />Remove from playlist</button>
-      </> : <button className="text-button" disabled={!editable} data-tooltip={!editable ? 'Create or open an editable playlist first' : undefined} onClick={() => addTracks([...validSelected])}><Plus size={15} />Add to playlist</button>}<button className="text-button" onClick={() => setSelected(new Set())}>Clear</button></div>}
+        {!session?.sync && <button className="text-button" disabled={busy} onClick={() => removeEntries(validSelected)}><Trash2 size={15} />Remove from playlist</button>}
+      </> : <button className="text-button" disabled={!editable || !!session?.sync} data-tooltip={!editable ? 'Create or open an editable playlist first' : undefined} onClick={() => addTracks([...validSelected])}><Plus size={15} />Add to playlist</button>}<button className="text-button" onClick={() => setSelected(new Set())}>Clear</button></div>}
       {playlist && !reorderable && <span className="muted">Clear filters and choose playlist order to reorder</span>}
     </div>
     <div role="grid" aria-label={playlist ? 'Playlist track list' : 'Library track list'} aria-rowcount={rows.length + 1} aria-colcount={6} onKeyDown={event => {
@@ -170,17 +178,18 @@ export function TrackList({ query, folder, artist, sortBy, playlist }: { query: 
       }
     }}>
       <div className="track-header" role="row"><span role="columnheader">#</span><span role="columnheader">Title</span><span role="columnheader">Album / folder</span><span role="columnheader">Audio</span><span role="columnheader" aria-label="Duration"><Clock3 size={15} /></span><span role="columnheader" aria-label="Actions" /></div>
-      <DragDropProvider onDragStart={event => { const id = String(event.operation.source?.id); if (!validSelected.has(id)) setSelected(new Set([id])); setDragCount(validSelected.has(id) ? validSelected.size : 1) }} onDragEnd={event => {
+      <DragDropProvider sensors={sensors} onDragStart={event => { const id = String(event.operation.source?.id); dragSelection.current = validSelected.has(id) ? new Set(validSelected) : new Set([id]); setSelected(dragSelection.current); setDragCount(dragSelection.current.size) }} onDragEnd={event => {
         setDragCount(0)
+        clickAfter.current = performance.now() + 350
         if (event.canceled || !reorderable || !session) return
         const source = String(event.operation.source?.id), target = String(event.operation.target?.id)
         const from = session.entries.findIndex(entry => entry.id === source)
         const to = session.entries.findIndex(entry => entry.id === target)
         if (from < 0 || to < 0 || from === to) return
-        reorderEntries(validSelected.has(source) ? validSelected : new Set([source]), to > from ? to + 1 : to)
+        reorderEntries(dragSelection.current, to > from ? to + 1 : to)
       }}>
         <div className="track-scroll" ref={parent}><div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
-          {visible.map(item => <div key={item.key} style={{ position: 'absolute', top: item.start, width: '100%', height: item.size }}><TrackRow row={rows[item.index]} index={item.index} selected={validSelected.has(rows[item.index].id)} selectable={!busy} reorderable={reorderable} selecting={selecting} onSelect={select} onResolve={setResolve} onDetails={setDetails} onPlay={play} onMenu={openMenu} /></div>)}
+          {visible.map(item => <div key={item.key} style={{ position: 'absolute', top: item.start, width: '100%', height: item.size }}><TrackRow row={rows[item.index]} index={item.index} selected={validSelected.has(rows[item.index].id)} selectable={!busy} reorderable={reorderable} selecting={selecting} touchReorder={mobile && touchReorder} suppressClick={() => performance.now() < clickAfter.current} onSelect={select} onResolve={setResolve} onDetails={setDetails} onPlay={play} onMenu={openMenu} /></div>)}
         </div>{!rows.length && <div className="list-empty"><Music2 size={30} /><strong>{query ? 'No matching tracks' : playlist ? 'Make room for your favorites' : 'No audio files found'}</strong><span>{playlist ? 'Browse your library and add tracks to this playlist.' : 'Choose a folder with browser-native audio files.'}</span></div>}</div>
         <DragOverlay>{dragCount > 0 && <div className="drag-overlay"><GripVertical size={18} />Moving {dragCount} {dragCount === 1 ? 'track' : 'tracks'}</div>}</DragOverlay>
       </DragDropProvider>

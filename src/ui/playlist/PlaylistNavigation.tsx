@@ -44,16 +44,17 @@ export function PlaylistNavigation({ library, open }: { library: Library; open: 
     {paths.map(path => {
       const session = playlistSession(library, path), active = view === 'playlist' && library.activePlaylist === session?.id
       const onDisk = library.playlists.includes(path)
-      const canDelete = library.connected && onDisk && !!source?.deletePlaylist && source.canDeletePlaylists !== false
+      const canDelete = library.connected && onDisk && !session?.sync && !library.syncRecovery && !!source?.deletePlaylist && source.canDeletePlaylists !== false
       const items: MenuAction[] = [
         { label: 'Open', run: () => { void open(path) }, disabled: !library.connected && !session },
-        { label: 'Save playlist', run: () => { void open(path).then(success => { if (success) void savePlaylist() }) }, disabled: !session || library.kind !== 'direct' || !library.connected || busy || session.status === 'unverified' },
+        ...(!session?.sync ? [{ label: 'Save playlist', run: () => { void open(path).then(success => { if (success) void savePlaylist() }) }, disabled: !session || library.kind !== 'direct' || !library.connected || busy || !!library.syncRecovery || session.status === 'unverified' }] : []),
         { label: 'Export', run: () => { void open(path).then(success => { if (success) exportPlaylist() }) }, disabled: !session || busy },
-        { label: onDisk ? 'Remove from app' : 'Discard draft', run: () => { if (session && (isDirty(session) || session.undo.length || session.redo.length)) setOperation({ path, action: 'remove' }); else removePlaylistFromApp(path) }, disabled: busy || library.scanning },
+        { label: onDisk ? 'Remove from app' : 'Discard draft', run: () => { if (session && (isDirty(session) || session.undo.length || session.redo.length)) setOperation({ path, action: 'remove' }); else removePlaylistFromApp(path) }, disabled: busy || library.scanning || !!session?.sync || !!library.syncRecovery, reason: 'Disable filename sync before removing this playlist' },
         { label: 'Delete playlist file', run: () => setOperation({ path, action: 'delete' }), disabled: !canDelete || busy || library.scanning, reason: !onDisk ? 'This draft has no file to delete' : library.kind === 'portable' ? 'Use your file manager in portable mode' : !library.connected ? 'Reconnect the library first' : 'Direct file deletion is unavailable', danger: true },
       ]
-      return <ContextActions key={path} label={`Actions for playlist ${path}`} items={items} className="playlist-row" disabled={busy}>
-        <button className={`nav-item ${active ? 'active' : ''}`} aria-label={session?.name ?? path.split('/').at(-1)} data-tooltip={session?.sourcePath && session.sourcePath !== path ? `${path} · imported from ${session.sourcePath}` : path} aria-current={active ? 'page' : undefined} onClick={() => { void open(path) }} disabled={busy || !library.connected && !session}><FileMusic size={16} /><span className="library-name">{session?.name ?? path.split('/').at(-1)}</span>{session && isDirty(session) && <span className="draft-dot" title="Unsaved draft" />}</button>
+      const label = session?.sync?.mode === 'filenames' ? session.name : path
+      return <ContextActions key={path} label={`Actions for playlist ${label}`} items={items} className="playlist-row" disabled={busy}>
+        <button className={`nav-item ${active ? 'active' : ''}`} aria-label={session?.name ?? path.split('/').at(-1)} data-tooltip={session?.sync?.mode === 'filenames' ? `${session.sync.folder || 'Library root'} · numbered filenames only` : session?.sourcePath && session.sourcePath !== path ? `${path} · imported from ${session.sourcePath}` : path} aria-current={active ? 'page' : undefined} onClick={() => { void open(path) }} disabled={busy || !library.connected && !session}><FileMusic size={16} /><span className="library-name">{session?.name ?? path.split('/').at(-1)}</span>{session && isDirty(session) && <span className="draft-dot" title={session.sync ? 'Sync pending' : 'Unsaved draft'} />}</button>
       </ContextActions>
     })}
     {!paths.length && <p className="nav-empty">Your playlists will appear here.</p>}

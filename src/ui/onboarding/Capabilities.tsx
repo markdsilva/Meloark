@@ -28,6 +28,7 @@ export function CapabilityDialog({ capabilities: c, close, tour }: { capabilitie
   const directSaving = c.userFileWriting && (!library || library.kind === 'direct')
   const recommendBrowser = !c.directoryPicker && !isChromiumBrowser()
   const rows: [string, Status, string][] = [
+    ['Automatic filename sync', !c.directoryPicker || library?.kind === 'portable' || !c.locks ? 'Unavailable' : library && Object.values(library.sessions).some(session => session.sync) ? 'Available' : 'Not yet verified', 'Opt-in for one complete audio folder. Enable tests a disposable native rename with write permission; unsupported folders retain M3U8-only mode. Playback delays disk changes.'],
     ['Playlist file deletion', deletion, deletion === 'Not yet verified' ? 'Choose a direct-access library to verify support. Deletion requires separate confirmation and write permission.' : 'Deletes only an explicitly confirmed playlist file. Write permission is separate. Portable mode uses your file manager.'],
     ['Direct folder access', c.directoryPicker ? 'Available' : 'Unavailable', c.directoryPicker ? 'Select a folder to grant access. Permissions may need renewal.' : !c.secure ? 'Requires HTTPS or localhost. Portable selection still works.' : 'Use portable folder or file selection here.'],
     ['Portable folder selection', c.directoryInput ? 'Available' : 'Unavailable', c.directoryInput ? 'Reads selected subfolders. Your device picker may restrict folder selection; files need reselection after reload.' : 'Select multiple files instead.'],
