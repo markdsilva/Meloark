@@ -42,7 +42,7 @@ export function CreatePlaylist({ close }: { close: () => void }) {
     } catch (reason) { setError(message(reason)); nameInput.current?.focus() }
     finally { setWorking(false) }
   }
-  return <Dialog title="Create a playlist" close={() => { if (!working) close() }} wide={mode === 'indexes' || storage !== 'm3u8'}>
+  return <Dialog title="Create a playlist" className="playlist-create" close={() => { if (!working) close() }} wide={mode === 'indexes' || storage !== 'm3u8'}>
     <p className="dialog-intro">Keep your order in a playlist, in the filenames, or in both.</p>
     <fieldset className="sync-options"><legend>Store playlist order</legend>{([
       ['m3u8', 'M3U8 only', 'Edit a playlist without renaming audio files.'],

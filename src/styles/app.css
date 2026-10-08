@@ -152,7 +152,14 @@ h1, h2, h3, p { margin-top: 0; }
 .sync-options label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
 .sync-options label:has(input:disabled) { opacity: .55; cursor: default; }
 .sync-options input { flex-shrink: 0; margin: 2px 0 0; }
-.sync-options strong { font-size: 12px; }
+.sync-options strong { font-size: 13px; }
+.sync-options small { font-size: 11px; line-height: 1.6; }
+.playlist-create > .muted { font-size: 12px; line-height: 1.6; }
+.playlist-create .dialog-heading { position: sticky; top: -26px; background: var(--surface); z-index: 2; padding: 8px 0; }
+.playlist-create .dialog-actions { position: sticky; bottom: -26px; background: var(--surface); z-index: 2; padding: 12px 0 0; }
+@media (max-width: 767px) { .playlist-create .dialog-heading { top: -18px; } .playlist-create .dialog-actions { bottom: -18px; } }
+.sync-options label > span { min-width: 0; }
+.dialog .field select { max-width: 100%; min-width: 0; }
 .sync-options small, .sync-preview small { display: block; color: var(--subtle); margin-top: 4px; }
 .sync-preview { max-height: 230px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; margin: 12px 0; position: relative; }
 .sync-preview > div > div { display: flex; gap: 12px; padding: 8px 12px; font-size: 11px; border-bottom: 1px solid var(--border); overflow: hidden; }

@@ -78,7 +78,7 @@ test('sync choices preview cleanly on desktop/mobile and a failed native capabil
     await page.screenshot({ path: 'test-results/sync-choices-desktop.png', fullPage: true })
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 })
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
       const dialog = page.getByRole('dialog', { name: 'Create a playlist', exact: true })
       expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
     }
