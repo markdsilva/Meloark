@@ -18,6 +18,11 @@ describe('folder order plans', () => {
   it('does no rename work for unchanged numbered order', () => {
     expect(planNames(entries(a, b), { a, b }, 'Music', { a: 'Alpha', b: 'Beta' }, [a.path, b.path])).toEqual([])
   })
+  it('keeps three-digit padding in an already numbered folder', () => {
+    const a = track('a', '001 - Alpha.flac'), b = track('b', '002 - Beta.flac')
+    expect(planNames(entries(a, b), { a, b }, '', {}, [a.path, b.path])).toEqual([])
+    expect(planNames(entries(b, a), { a, b }, '', {}, [a.path, b.path]).map(move => move.target)).toEqual(['001 - Beta.flac', '002 - Alpha.flac'])
+  })
   it.each([entries(a), entries(a, a), entries(a, track('outside', 'Elsewhere/Beta.mp3'))].map(rows => [rows]))('rejects subsets, duplicates and multiple folders', rows => {
     expect(() => planNames(rows, { a, b }, 'Music', {}, [a.path, b.path])).toThrow(/every audio file/)
   })

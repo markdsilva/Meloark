@@ -3,11 +3,13 @@ import type { Track } from '../domain/models'
 import type { LibrarySource } from '../platform/filesystem/types'
 import { PlaybackQueue, type Repeat, type QueueContext, type QueueItem } from './queue'
 import { liveBitrate } from '../metadata/liveBitrate'
+import { withFilesystemLock } from '../platform/filesystem/mutationLock'
 
 interface PlayerState {
   current: string | null; track?: Track; playing: boolean; loading: boolean; position: number; duration: number
   volume: number; muted: boolean; shuffle: boolean; repeat: Repeat; error?: string
   context?: QueueContext
+  renameSafe?: boolean
 }
 function preferredVolume() {
   try { const value = Number(localStorage.getItem('trackindex-volume') ?? 0.75); return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0.75 } catch { return 0.75 }
@@ -20,6 +22,7 @@ class PlayerController {
   private tracks: Record<string, Track> = {}
   private source?: LibrarySource
   private scope = ''
+  private snapshotPlayback = false
   readonly queue = new PlaybackQueue()
   private element() {
     if (this.audio) return this.audio
@@ -47,11 +50,12 @@ class PlayerController {
     }
     return audio
   }
-  configure(context: QueueContext | undefined, entries: QueueItem[], tracks: Record<string, Track>, source?: LibrarySource) {
+  configure(context: QueueContext | undefined, entries: QueueItem[], tracks: Record<string, Track>, source?: LibrarySource, snapshotPlayback = false) {
     const scope = context ? `${context.libraryId}/${context.kind === 'playlist' ? context.sessionId : '@browse'}` : ''
     if (scope !== this.scope) { this.stop(); this.queue.entries = []; this.queue.history = []; this.queue.future = []; this.scope = scope }
     usePlayer.setState({ context })
     this.tracks = tracks; this.source = source
+    this.snapshotPlayback = snapshotPlayback
     const before = this.queue.current
     const current = this.queue.reconcile(entries)
     if (before && current !== before) {
@@ -80,15 +84,26 @@ class PlayerController {
     const audio = this.element()
     audio.pause()
     liveBitrate.register()
-    usePlayer.setState({ current: id, track, loading: true, position: 0, duration: 0, error: undefined })
+    usePlayer.setState({ current: id, track, loading: true, position: 0, duration: 0, error: undefined, renameSafe: false })
     try {
-      const file = await this.source.readFile(track.path)
+      const source = this.source, snapshot = this.snapshotPlayback
+      const read = async () => {
+        const current = this.tracks[track.id] ?? track
+        const original = await source.readFile(current.path)
+        if (!snapshot || original.size > 128 * 1024 * 1024) return { file: original, renameSafe: false }
+        // Copy only the currently playing recording into memory. A Blob made
+        // directly from File can retain the native disk snapshot and break when
+        // that entry is renamed; arrayBuffer supplies independent bytes.
+        return { file: new File([await original.arrayBuffer()], original.name, { type: original.type, lastModified: original.lastModified }), renameSafe: true }
+      }
+      const { file, renameSafe } = snapshot ? await withFilesystemLock(read) : await read()
       if (token !== this.generation) return
       if (this.url) URL.revokeObjectURL(this.url)
       this.url = URL.createObjectURL(file)
       audio.src = this.url
       liveBitrate.register(file, `${this.scope}/${track.path}/${file.size}/${file.lastModified}`)
       audio.load()
+      usePlayer.setState({ renameSafe })
       this.mediaMetadata(track)
       if (autoplay) {
         try { await audio.play() }
@@ -143,9 +158,10 @@ class PlayerController {
     liveBitrate.register()
     this.audio?.pause()
     this.audio?.removeAttribute('src')
+    this.audio?.load()
     this.queue.current = null
     if (this.url) { URL.revokeObjectURL(this.url); this.url = undefined }
-    usePlayer.setState({ current: null, track: undefined, playing: false, loading: false, position: 0, duration: 0, error })
+    usePlayer.setState({ current: null, track: undefined, playing: false, loading: false, position: 0, duration: 0, error, renameSafe: false })
   }
 }
 export const player = new PlayerController()

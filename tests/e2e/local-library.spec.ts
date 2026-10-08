@@ -23,6 +23,7 @@ test('optional local-library scan, metadata, playback, review, export, and recov
   await page.addInitScript(() => { window.showDirectoryPicker = undefined })
   try {
     await page.goto('/'); await page.getByLabel('Select library folder', { exact: true }).setInputFiles(directory!)
+    await page.getByRole('button', { name: 'Browse first', exact: true }).click()
     await expect.poll(() => page.evaluate(async () => { const path = '/src/app/store.ts'; const { useApp } = await import(path); return Object.keys(useApp.getState().libraries[0]?.tracks ?? {}).length }), { timeout: 60000 }).toBe(audioCount)
     await expect.poll(() => page.evaluate(async () => { const path = '/src/app/store.ts'; const { useApp } = await import(path); const tracks = Object.values(useApp.getState().libraries[0]?.tracks ?? {}) as { metadata: { technicalVersion?: number; error?: string } }[]; return tracks.filter(track => track.metadata.technicalVersion === 1 && !track.metadata.error).length }), { timeout: 60000 }).toBe(audioCount)
     await page.getByRole('button', { name: 'New playlist', exact: true }).click(); await page.getByLabel('Playlist name', { exact: true }).fill('Read-only acceptance')

@@ -159,6 +159,12 @@ h1, h2, h3, p { margin-top: 0; }
 .playlist-create .dialog-actions { position: sticky; bottom: -26px; background: var(--surface); z-index: 2; padding: 12px 0 0; }
 @media (max-width: 767px) { .playlist-create .dialog-heading { top: -18px; } .playlist-create .dialog-actions { bottom: -18px; } }
 .sync-options label > span { min-width: 0; }
+.folder-setup .sync-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.folder-setup .sync-options legend { margin-bottom: 8px; }
+.folder-setup .sync-options label { margin: 0; flex-direction: column; padding: 16px; }
+.setup-detected { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); font-size: 12px; }
+.setup-detected strong { color: var(--accent-text); }
+@media (max-width: 600px) { .folder-setup .sync-options { grid-template-columns: 1fr; gap: 6px; } .folder-setup .sync-options label { flex-direction: row; padding: 12px; } }
 .dialog .field select { max-width: 100%; min-width: 0; }
 .sync-options small, .sync-preview small { display: block; color: var(--subtle); margin-top: 4px; }
 .sync-preview { max-height: 230px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; margin: 12px 0; position: relative; }

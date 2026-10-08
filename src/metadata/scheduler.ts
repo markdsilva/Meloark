@@ -1,5 +1,6 @@
 import { applyMetadata, sources, useApp } from '../app/store'
 import { dirname, type TrackMetadata } from '../domain/models'
+import { withFilesystemLock } from '../platform/filesystem/mutationLock'
 
 interface Job { libraryId: string; generation: number; trackId: string; artwork: boolean }
 const jobs: Job[] = []
@@ -78,7 +79,11 @@ async function drain() {
         const library = useApp.getState().libraries.find(l => l.id === job.libraryId), source = sources.get(job.libraryId), track = library?.tracks[job.trackId]
         if (!library?.connected || library.generation !== job.generation || !source || !track) continue
         if (!job.artwork && track.metadata.technicalVersion === 1 && (track.metadataStatus === 'ready' || checkedArtwork.has(artKey(job)))) continue
-        let metadata = await parse(await source.readFile(track.path), track.metadata.title, job.artwork)
+        let metadata = await withFilesystemLock(async () => {
+          const current = useApp.getState().libraries.find(item => item.id === job.libraryId)?.tracks[job.trackId]
+          if (!current) throw new Error('Track is no longer in the library.')
+          return parse(await source.readFile(current.path), current.metadata.title, job.artwork)
+        })
         if (job.artwork) {
           checkedArtwork.add(artKey(job))
           let art = metadata.artwork

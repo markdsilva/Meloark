@@ -154,10 +154,10 @@ export function App() {
     </main>
     {lyricsOpen && <Suspense fallback={null}><LyricsPanel /></Suspense>}
     <Player />
-    <BrowserSuggestion capabilities={capabilities} paused={help || create || sidebar || picker || lyricsOpen} details={() => setHelp(true)} />
+    <BrowserSuggestion capabilities={capabilities} paused={help || create || !!state.setupLibrary || sidebar || picker || lyricsOpen} details={() => setHelp(true)} />
     <Guide />
     <Tooltips />
     {help && <CapabilityDialog capabilities={capabilities} close={() => setHelp(false)} tour={() => { setHelp(false); startGuide() }} />}
-    {create && library && <CreatePlaylist close={() => setCreate(false)} />}
+    {(create || state.setupLibrary === library?.id && !!library) && library && <CreatePlaylist key={library.id} setup={state.setupLibrary === library.id} close={() => { setCreate(false); useApp.setState({ setupLibrary: undefined }) }} />}
   </div>
 }

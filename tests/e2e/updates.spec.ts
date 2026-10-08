@@ -138,6 +138,9 @@ test('empty and reviewed multi-folder creation reject duplicate names and recove
   try {
     for (const folder of ['One', 'Two']) { await mkdir(join(root, folder)); await writeFile(join(root, folder, '001 - Song.wav'), wavSample()); await writeFile(join(root, folder, 'Unindexed.wav'), wavSample()) }
     await page.goto('/'); await page.getByLabel('Select library folder', { exact: true }).setInputFiles(root)
+    await expect(page.getByRole('dialog').filter({ hasText: 'Set up' })).toBeVisible()
+    await expect(page.getByRole('radio', { name: /Numbered filenames only/ })).toBeDisabled()
+    await page.getByRole('button', { name: 'Browse first', exact: true }).click()
     await page.getByRole('button', { name: 'New playlist', exact: true }).click(); await page.getByLabel('Playlist name', { exact: true }).fill('Empty')
     await page.getByRole('button', { name: 'Create draft', exact: true }).click(); await expect(page.getByText('Make room for your favorites')).toBeVisible()
     await page.getByRole('button', { name: 'New playlist', exact: true }).click(); await page.getByLabel('Playlist name', { exact: true }).fill('Empty'); await page.getByRole('button', { name: 'Create draft', exact: true }).click()

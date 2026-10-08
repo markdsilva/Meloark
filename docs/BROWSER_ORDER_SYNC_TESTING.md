@@ -6,11 +6,21 @@ Branch: `feat/browser-order-sync`. No merge or production deployment is part of 
 
 No local checkout is needed. Open the HTTPS preview for **feat/browser-order-sync** in current desktop Chrome or Edge on Windows, then follow the sample-folder checks below. Use the direct **Choose a music folder** button for rename tests. Selecting individual files uses portable mode and cannot rename the originals.
 
-Use the preview's own hostname, separate from the main production site, and keep using that same preview URL while testing. Folder permissions, drafts and recovery records belong to the exact browser origin; switching preview URLs can lose access to the remembered recovery session. This branch adds an IndexedDB v3 recovery store, while the older main build uses v2. The test preview must not share the main site's origin.
+Use the preview's own hostname, separate from the main production site. Folder permissions, drafts and remembered track identities belong to the exact browser origin. If the browser session is lost or a preview URL changes, the on-disk journal can still finish its recorded batch; reconnect the folder, choose Recover filename sync, then review its setup again. Keep the journal and temporary files intact. This branch adds an IndexedDB v3 recovery store, while the older main build uses v2. The test preview must not share the main site's origin.
 
 The branch includes `"previews": {}` in `wrangler.jsonc` for the already-configured `npx wrangler preview` command. Assets and SPA routing stay at the top level. GitHub Actions performs checks only; Cloudflare's existing branch integration handles preview publication. No Cloudflare account settings or main branch deployment are changed by this work.
 
 Native support and write permission are verified on a disposable probe before music is renamed. Unsupported browsers/filesystems keep M3U8-only available. No experimental browser flag is needed or recommended.
+
+## Folder setup and recovery updates
+
+Choosing a new folder now opens **Set up [folder name]** after scanning, showing the track, numbered-filename and playlist counts. The amber/charcoal setup cards offer M3U8 only, numbered filenames only, or both. **Browse first** keeps listening and browsing available without creating anything.
+
+For the drag-and-sync workflow, choose **Numbered filenames + M3U8**, review the filenames, confirm automatic renaming and choose **Set up playlist**. Every track in the selected audio folder is included. Existing three-digit numbering keeps its padding. The default M3U8-only setup includes the selected folder's tracks in filename order and saves the playlist without renaming audio; ordinary M3U8 edits continue to use Save playlist.
+
+Filename-sync playback uses an independent in-memory copy of the currently playing track up to 128 MiB. Dragging, filename changes, playlist updates, seeking and playback can then happen together. Larger recordings, or a disk-backed recording loaded before sync was enabled, wait for **Stop & sync** rather than allocating unbounded memory.
+
+The recovery banner now includes the underlying error. Native moves are checked against full-content SHA-256 hashes in bounded chunks, allowing a filesystem timestamp change without mistaking it for changed music. Older journals remain readable and use their recorded size/content samples for recovery; they cannot supply a full-file hash retroactively. A lost browser session can recover the exact recorded disk batch without inventing its old playlist authority or track identities. Once recovery completes, the folder is scanned and setup is offered again.
 
 ## Optional Windows local setup
 
@@ -40,16 +50,18 @@ Use a **copy** of a small music folder for the first test. Include three or more
 2. Create **Numbered filenames only**. Select one complete folder, inspect the preview and enable sync. Allow write access. Wait for **Synced**. Audio filenames should be numbered, the sidecar should follow, and no new M3U8 should appear. Drag a row and verify filenames follow the order. Repeat with a selected group and Undo/Redo.
 3. Disable sync in Sync settings. Create **Numbered filenames + M3U8** with a fresh name. Drag rows; verify both filenames and the dedicated M3U8 follow the new order. The additional playlists must retain their own order, repeated occurrences, comments, line endings and encoding while their references change.
 4. For initial **existing playlist order**, first open a fully resolved M3U8 containing every audio file in one folder exactly once. Select it in New playlist's Initial order field and verify that its order, rather than filename order, determines the first renumbering. Subsets, duplicates or multiple folders must be rejected before music is changed.
-5. Play, pause and seek, then reorder while the track is loaded. The local order should update immediately, status should say **Waiting for playback to stop**, and files must remain unchanged until **Stop & sync**. Play again afterwards and check seek, next/previous, audio details and lyrics.
+5. Play, pause and seek, then reorder while the track is loaded. For recordings up to 128 MiB loaded after enabling sync, the filenames and M3U8 should update while playback remains seekable. Larger recordings should show **Waiting for playback to stop**, keeping files unchanged until **Stop & sync**. Check seek, next/previous, audio details and lyrics afterwards.
 6. Pause sync, make several edits, then resume. The latest order should be written once the queue settles. While a batch is in progress, further reorder edits stay responsive and are coalesced into the next batch.
-7. Reload after a completed sync; reconnect if asked. Verify order, stable track metadata/lyrics and the same filenames. On a copied folder only, close the tab during a larger batch and reopen. **Recover filename sync** should finish the recorded batch before a new one starts. Do not delete the recovery journal or temporary files manually.
+7. Reload after a completed sync; reconnect if asked. Verify order, stable track metadata/lyrics and the same filenames. On a copied folder only, close the tab during a larger batch and reopen. **Recover filename sync** should finish the recorded batch before a new one starts. Also test recovery after losing the remembered browser session: the recorded disk batch should complete, then folder setup should be offered again. Do not delete the recovery journal or temporary files manually.
 8. Try an occupied target, mismatched filename case, an affected absolute playlist reference, and externally edited authority M3U8. Sync should stop with an explanation and leave the conflicting file intact. Use Disable sync/reload/review for preflight conflicts. If an interruption has already created a recovery journal, preserve the journal and resolve the reported conflict before retrying recovery.
 9. Test another subfolder, filters and sorting, touch viewport, context menus, keyboard moves, sidebar, player and lyrics panel. Filtered/sorted views must explain why dragging is disabled. On touch, **Reorder tracks** provides deliberate whole-row dragging; turn it off for scrolling.
 10. Test portable file selection in Firefox/Safari or by selecting files instead of a direct folder. Only M3U8-only should be available; Save/Export/playback and existing drafts should continue to work.
 
 ## Automated checks
 
-Cloud acceptance [run 37750763051](https://github.com/markdsilva/Meloark/actions/runs/37750763051) passed 184 unit tests, 42 browser flows, the native folder test and the production-bundle smoke test. The native check used unmodified Google Chrome 154.0.8037.97 on Linux, a disposable browser profile and generated audio files. It verified unchanged audio bytes, drag ordering, dependent M3U8 references, LRC renaming, Undo, paused playback/seek, Stop & sync and reload with stable track IDs. Windows filesystem acceptance remains the manual preview test above.
+The previous branch acceptance [run 37750763051](https://github.com/markdsilva/Meloark/actions/runs/37750763051) covered the original implementation. The current changes were validated locally in the Codex cloud environment with 189 unit/integration tests, 42 Chromium browser flows and real native folder tests using generated unnumbered WAV and numbered FLAC recordings. Native checks verify unchanged audio bytes, playlist-only setup, drag sync, dependent M3U8 references, LRC renaming, Undo, uninterrupted playback/seek, reload and recovery after a real move was interrupted, including loss of the remembered sync session. The production bundle is checked separately, including native renaming.
+
+The uploaded music ZIP exceeded the attachment tool's 32 MiB transfer limit and could not be read; these results use generated audio, not that collection. Windows filesystem acceptance still requires the manual branch-preview checks above.
 
 ```powershell
 npm run lint
@@ -61,7 +73,7 @@ npx playwright install chromium
 npm run test:e2e -- --project=chromium
 ```
 
-The opt-in native picker test runs on an isolated Linux X11 display in cloud CI, using xdotool to select generated temporary files. It uses real directory/file handles and removes only its disposable fixture. Windows folder permissions and rename support should be checked manually with the steps above.
+The opt-in native picker test runs on an isolated Linux X11 display in cloud CI, using xdotool to select generated temporary files and ffmpeg to encode its FLAC fixture. It uses real directory/file handles and removes only its disposable fixture. Windows folder permissions and rename support should be checked manually with the steps above.
 
 The test branch's GitHub Actions workflow runs checks and Chromium flows, stores screenshots/traces, and never deploys the app or updates main. Unit fault tests are adapter tests; they do not themselves prove native Windows rename support.
 
@@ -71,6 +83,6 @@ The test branch's GitHub Actions workflow runs checks and Chromium flows, stores
 - No native move API, denied access, unsupported filesystems, ambiguous references or unsafe names cause a clear block. There is no copy/delete fallback.
 - The recovery protocol is resumable, not an atomic filesystem transaction. App-origin Web Locks cannot lock out Explorer, tag editors, cloud-sync clients or another application.
 - Use one Meloark tab for the test folder. Web Locks serialize batches across tabs, but separate tabs do not share live playlist edits or selection state.
-- File identity checks use exact journal paths and stable IDs plus size, modification time and bounded head/tail fingerprints. They do not deduplicate identical recordings, and they cannot detect a deliberately changed middle section with unchanged metadata. Avoid concurrent external edits.
+- New batches verify full-file content hashes using bounded memory, while preflight still checks inventory size and modification time. Recovery of older journals has only their original head/tail samples. Identical recordings remain separate tracks. Avoid concurrent external edits.
 - Only playlists inside the granted library and matching same-folder `.lrc` sidecars are repaired. External playlists and other sidecar types are outside this branch's scope.
-- Browser storage eviction or manually deleting recovery data can remove the remembered session/track identity needed for automated recovery. Keep the copied test folder until acceptance is complete.
+- Browser storage eviction can lose remembered identities and permission bindings. The on-disk journal can finish its recorded batch after reconnecting, but cannot restore unrecorded drafts or invent the original app identities. Deleting the on-disk journal or temporary files can prevent recovery. Keep the copied test folder until acceptance is complete.

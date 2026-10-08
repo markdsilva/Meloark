@@ -1,4 +1,4 @@
-import { activeLibrary, activeSession, message, notify, persistNow, sources, updateLibrary, useApp } from './store'
+import { activeLibrary, activeSession, message, notify, persistNow, scanLibrary, sources, updateLibrary, useApp } from './store'
 import { AUDIO_EXTENSIONS, extension, dirname, filename, newId, naturalCompare, isDirty, type PlaylistEntry, type PlaylistSession } from '../domain/models'
 import { filenameStem, inFolder, patchReferences, planNames, validFilename } from '../domain/orderSync'
 import { emptyDocument, MAX_BYTES, serializePlaylist } from '../playlists/codec'
@@ -8,11 +8,11 @@ import { executeJournal, journalBytes, prepareJournal, readJournal, type SyncJou
 import { clearSyncJournal, loadSyncJournal, saveSyncJournal } from '../platform/persistence/database'
 import { equalBytes } from '../platform/filesystem/saveProtocol'
 import { player, usePlayer } from '../playback/player'
+import { withFilesystemLock } from '../platform/filesystem/mutationLock'
+export { FILESYSTEM_LOCK, withFilesystemLock } from '../platform/filesystem/mutationLock'
 
 // One origin-wide lock also protects nested/overlapping registered libraries.
 // External applications still need to leave the folder alone during a batch.
-export const FILESYSTEM_LOCK = 'meloark:filesystem-mutation'
-export const withFilesystemLock = <T>(run: () => Promise<T>): Promise<T> => navigator.locks ? navigator.locks.request(FILESYSTEM_LOCK, run) : run()
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 const running = new Set<string>()
 let subscribed = false
@@ -27,7 +27,7 @@ function listen() {
   if (subscribed) return
   subscribed = true
   usePlayer.subscribe((state, old) => {
-    if (old.current && (!state.current || state.context?.libraryId !== old.context?.libraryId)) {
+    if (old.current && (!state.current || state.context?.libraryId !== old.context?.libraryId || state.renameSafe && !old.renameSafe)) {
       for (const library of useApp.getState().libraries) for (const session of Object.values(library.sessions)) if (session.sync?.enabled && session.sync.status === 'waiting') scheduleSync(library.id, session.id)
     }
   })
@@ -84,7 +84,7 @@ export async function checkRecovery(libraryId: string): Promise<boolean> {
     const journal = disk?.journal ?? cached!
     updateLibrary(libraryId, library => ({ ...library, connected: true, scanning: false, syncRecovery: 'An interrupted filename sync was found. Recover it before scanning, saving, or renaming files.',
       sessions: Object.fromEntries(Object.entries(library.sessions).map(([id, session]) => [id, session.sync ? { ...session, sync: { ...session.sync, status: 'recovery' as const, error: 'Recovery is required before another sync.' } } : session])) }))
-    if (journal.libraryId !== libraryId) notify('This folder contains recovery data from another remembered library. Reconnect the original library to recover it.')
+    if (journal.libraryId !== libraryId) notify('This folder contains an interrupted sync from another browser session. Recover its recorded file changes, then review the folder to set up sync again.')
     return true
   } catch (error) {
     updateLibrary(libraryId, library => ({ ...library, scanning: false, connected: true, syncRecovery: message(error) }))
@@ -221,12 +221,12 @@ async function runSync(libraryId: string, sessionId: string) {
   const library = useApp.getState().libraries.find(item => item.id === libraryId), session = library?.sessions[sessionId], source = sources.get(libraryId)
   if (!session?.sync?.enabled || !isDirty(session) || !(source instanceof DirectSource) || library?.syncRecovery) return
   const playback = usePlayer.getState()
-  if (playback.current && playback.context?.libraryId === libraryId) { setSync(libraryId, sessionId, 'waiting', 'Waiting until playback stops. Native file snapshots can become unreadable after a rename.'); return }
+  if (playback.current && playback.context?.libraryId === libraryId && !playback.renameSafe) { setSync(libraryId, sessionId, 'waiting', 'This track uses disk-backed playback. Stop playback to sync filenames; tracks up to 128 MiB can sync while playing.'); return }
   running.add(libraryId); setSync(libraryId, sessionId, 'syncing')
   try {
     await withFilesystemLock(async () => {
       const playback = usePlayer.getState()
-      if (playback.current && playback.context?.libraryId === libraryId) { setSync(libraryId, sessionId, 'waiting', 'Waiting until playback stops.'); return }
+      if (playback.current && playback.context?.libraryId === libraryId && !playback.renameSafe) { setSync(libraryId, sessionId, 'waiting', 'Waiting until playback stops.'); return }
       if ((await source.getAccess()).write !== 'granted') throw new Error('Write access expired. Click Retry sync to reconnect it.')
       const journal = await makeJournal(libraryId, sessionId, source)
       if (!journal.moves.length && !journal.patches.length) { await commitJournal({ ...journal, phase: 'complete' }, source); return }
@@ -235,6 +235,7 @@ async function runSync(libraryId: string, sessionId: string) {
     })
   } catch (error) {
     const recovery = await checkRecovery(libraryId)
+    if (recovery) updateLibrary(libraryId, current => ({ ...current, syncRecovery: `${message(error)} Recovery data is preserved. Recover filename sync to continue; keep the temporary files and journal.` }))
     setSync(libraryId, sessionId, recovery ? 'recovery' : 'error', message(error))
   } finally {
     running.delete(libraryId)
@@ -249,17 +250,34 @@ export async function recoverSync(libraryId = activeLibrary()?.id) {
   if (!await source.requestAccess('write')) { notify('Write access is needed to recover filename sync.'); return }
   if (usePlayer.getState().current && usePlayer.getState().context?.libraryId === libraryId) { notify('Stop playback before recovering file renames.'); return }
   running.add(libraryId)
+  let rescan = false
   try {
     await withFilesystemLock(async () => {
       const disk = await readJournal(source), cached = await loadSyncJournal(libraryId), journal = disk?.journal ?? cached
-      if (!journal || journal.libraryId !== libraryId || !library.sessions[journal.sessionId]?.sync) throw new Error('Reconnect the original remembered library and sync playlist. Recovery cannot invent track identities or an order authority.')
+      if (!journal) throw new Error('No recovery record was found. Reselect the original folder; keep its temporary files intact.')
       const done = await executeJournal(source, journal, disk?.bytes ?? null, saveSyncJournal)
-      await commitJournal(done, source)
+      if (journal.libraryId === libraryId && library.sessions[journal.sessionId]?.sync) await commitJournal(done, source)
+      else {
+        // A branch preview, a different browser profile or evicted storage may
+        // not retain the old app session. The disk journal still defines an
+        // exact, content-verified batch. Finish that batch without inventing a
+        // new authority or applying an unknown mapping to remembered tracks.
+        await source.removeJournal(journalBytes(done))
+        await clearSyncJournal(journal.libraryId)
+        source.resetHandles()
+        updateLibrary(libraryId, current => ({ ...current, syncRecovery: undefined }))
+        rescan = true
+      }
       notify('Filename sync recovered and verified.')
     })
   } catch (error) { updateLibrary(libraryId, current => ({ ...current, syncRecovery: message(error) })); notify(message(error)) }
   finally {
     running.delete(libraryId)
+    if (rescan) {
+      await scanLibrary(libraryId)
+      useApp.setState({ setupLibrary: libraryId })
+      notify('Interrupted file changes recovered and verified. Review this folder to set up its order again.')
+    }
     const current = useApp.getState().libraries.find(item => item.id === libraryId)
     for (const session of Object.values(current?.sessions ?? {})) if (session.sync?.enabled && session.sync.status === 'queued') scheduleSync(libraryId, session.id)
   }

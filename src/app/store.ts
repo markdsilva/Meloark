@@ -29,6 +29,7 @@ interface AppState {
   libraries: Library[]; activeLibrary?: string; view: 'library' | 'playlist' | 'albums'
   ready: boolean; notice?: string; storageError?: string; busy: boolean
   visibleTrackIds: string[]
+  setupLibrary?: string
 }
 export const useApp = create<AppState>(() => ({ libraries: [], view: 'library', ready: false, busy: false, visibleTrackIds: [] }))
 export const sources = new Map<string, LibrarySource>()
@@ -58,14 +59,15 @@ export function updateLibrary(id: string, update: (library: Library) => Library,
 }
 function syncPlayer() {
   const library = activeLibrary(), session = activeSession()
+  const snapshotPlayback = !!library && Object.values(library.sessions).some(item => item.sync)
   const context = usePlayer.getState().context
   if (context?.kind === 'library' && context.libraryId === library?.id) {
     // Browsing filters are a snapshot, while fresh metadata and missing files reconcile.
     const entries = library.scanning ? player.queue.entries : player.queue.entries.filter(entry => entry.trackId && library.tracks[entry.trackId])
-    player.configure(context, entries, library.tracks, library.connected ? sources.get(library.id) : undefined)
+    player.configure(context, entries, library.tracks, library.connected ? sources.get(library.id) : undefined, snapshotPlayback)
   } else {
     player.configure(library && session ? { kind: 'playlist', libraryId: library.id, sessionId: session.id } : undefined,
-      session?.entries ?? [], library?.tracks ?? {}, library?.connected ? sources.get(library.id) : undefined)
+      session?.entries ?? [], library?.tracks ?? {}, library?.connected ? sources.get(library.id) : undefined, snapshotPlayback)
   }
 }
 export function playLibraryTrack(id: string, orderedIds = useApp.getState().visibleTrackIds) {
@@ -73,14 +75,14 @@ export function playLibraryTrack(id: string, orderedIds = useApp.getState().visi
   if (library && (syncBusy(library.id) || library.syncRecovery)) { notify('Wait for filename sync or recover it before starting playback.'); return }
   if (!library?.connected || !source || !library.tracks[id]) { notify('Reconnect the library to play this track.'); return }
   const ids = [...new Set(orderedIds.includes(id) ? orderedIds : [id, ...orderedIds])].filter(key => library.tracks[key])
-  player.configure({ kind: 'library', libraryId: library.id }, ids.map(trackId => ({ id: trackId, trackId })), library.tracks, source)
+  player.configure({ kind: 'library', libraryId: library.id }, ids.map(trackId => ({ id: trackId, trackId })), library.tracks, source, Object.values(library.sessions).some(item => item.sync))
   player.queue.start(id); void player.play(id)
 }
 export function playPlaylistEntry(id: string) {
   const library = activeLibrary(), session = activeSession(), source = library && sources.get(library.id)
   if (library && (syncBusy(library.id) || library.syncRecovery)) { notify('Wait for filename sync or recover it before starting playback.'); return }
   if (!library?.connected || !session || !source || !session.entries.some(entry => entry.id === id)) return
-  player.configure({ kind: 'playlist', libraryId: library.id, sessionId: session.id }, session.entries, library.tracks, source)
+  player.configure({ kind: 'playlist', libraryId: library.id, sessionId: session.id }, session.entries, library.tracks, source, Object.values(library.sessions).some(item => item.sync))
   player.queue.start(id); void player.play(id)
 }
 export function togglePlayback() {
@@ -116,7 +118,7 @@ export function bootstrap() {
   })()
   return startup
 }
-export async function addSource(source: LibrarySource, reconnectId?: string) {
+export async function addSource(source: LibrarySource, reconnectId?: string, setupFolder = source.kind === 'direct') {
   // A quick selection must not be overwritten by asynchronous workspace restore.
   await bootstrap()
   const id = reconnectId ?? newId()
@@ -128,9 +130,11 @@ export async function addSource(source: LibrarySource, reconnectId?: string) {
   else updateLibrary(id, library => ({ ...library, kind: source.kind, name: source.name, connected: true }))
   selectLibrary(id)
   await scanLibrary(id)
+  const current = useApp.getState().libraries.find(library => library.id === id)
+  if (!existing && setupFolder && current?.connected && !current.scanError && !current.syncRecovery && Object.keys(current.tracks).length) useApp.setState({ setupLibrary: id })
 }
 export async function openPortable(files: File[], reconnectId?: string) {
-  try { await addSource(new PortableSource(files), reconnectId) } catch (error) { notify(message(error)) }
+  try { await addSource(new PortableSource(files), reconnectId, files.some(file => !!file.webkitRelativePath)) } catch (error) { notify(message(error)) }
 }
 export async function openDirectory(reconnectId?: string) {
   try {

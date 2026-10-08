@@ -1,7 +1,8 @@
 import { JOURNAL_PATH, syncKey, type RenameIntent } from '../../domain/orderSync'
-import { dirname } from '../../domain/models'
+import { AUDIO_EXTENSIONS, dirname, extension } from '../../domain/models'
 import { normalizeRelative } from '../../playlists/paths'
 import { equalBytes, hashBytes } from './saveProtocol'
+import { createSHA256 } from 'hash-wasm'
 
 export interface SyncMove extends RenameIntent { fingerprint: string }
 export interface SyncPatch { path: string; before: number[] | null; after: number[] }
@@ -16,11 +17,23 @@ export interface SyncDisk {
   writeSyncFile(path: string, bytes: Uint8Array, expected: Uint8Array | null): Promise<unknown>
 }
 export async function fingerprint(file: File) {
-  // Bounded-memory identity check. Paths and journal phases provide identity;
-  // identical audio fingerprints never deduplicate tracks.
+  // Native moves can change filesystem timestamps. Verify content instead of
+  // treating a timestamp change caused by our own rename as an external edit.
+  // Hash every byte in bounded chunks, including the middle of large recordings.
+  const hash = await createSHA256()
+  hash.init()
+  for (let offset = 0; offset < file.size; offset += 1024 * 1024) hash.update(new Uint8Array(await file.slice(offset, offset + 1024 * 1024).arrayBuffer()))
+  return `sha256:${file.size}:${hash.digest('hex')}`
+}
+async function matchesFingerprint(file: File, expected: string, moved: boolean) {
+  if (expected.startsWith('sha256:')) return await fingerprint(file) === expected
+  // Resume journals written by the previous branch without deleting recovery
+  // data. Keep its strict timestamp check on the original source; at a staged
+  // or final path, verify its recorded size and content sample independently.
   const head = new Uint8Array(await file.slice(0, 65536).arrayBuffer()), tail = new Uint8Array(await file.slice(Math.max(65536, file.size - 65536)).arrayBuffer())
   const sample = new Uint8Array(head.length + tail.length); sample.set(head); sample.set(tail, head.length)
-  return `${file.size}:${file.lastModified}:${await hashBytes(sample)}`
+  const [size, modified, hash] = expected.split(':')
+  return String(file.size) === size && (moved || String(file.lastModified) === modified) && await hashBytes(sample) === hash
 }
 export function journalBytes(journal: SyncJournal) {
   const bytes = new TextEncoder().encode(JSON.stringify(journal))
@@ -33,7 +46,7 @@ export function parseJournal(bytes: Uint8Array): SyncJournal {
   const safe = (path: unknown): path is string => typeof path === 'string' && normalizeRelative(path) === path
   const data = (bytes: unknown): bytes is number[] => Array.isArray(bytes) && bytes.length <= 16 * 1024 * 1024 && bytes.every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255)
   if (value.version !== 1 || typeof value.token !== 'string' || !/^[\w-]+$/.test(value.token) || typeof value.libraryId !== 'string' || typeof value.sessionId !== 'string' || !Number.isInteger(value.revision) || !Array.isArray(value.order) || value.order.some(id => typeof id !== 'string') || !['staging', 'finalizing', 'writing', 'complete'].includes(value.phase) || (value.folder !== '' && !safe(value.folder)) || !Array.isArray(value.moves) || !Array.isArray(value.patches)) throw new Error('The recovery journal is invalid. No files were changed.')
-  for (const move of value.moves) if (!safe(move.source) || !safe(move.target) || !safe(move.temporary) || [move.source, move.target, move.temporary].some(path => dirname(path) !== value.folder) || !move.temporary.split('/').at(-1)?.startsWith(`.meloark-${value.token}-`) || typeof move.fingerprint !== 'string') throw new Error('Unsafe rename data in the recovery journal.')
+  for (const move of value.moves) if (!safe(move.source) || !safe(move.target) || !safe(move.temporary) || [move.source, move.target, move.temporary].some(path => dirname(path) !== value.folder) || !move.temporary.split('/').at(-1)?.startsWith(`.meloark-${value.token}-`) || typeof move.fingerprint !== 'string' || !/^(?:sha256:\d+:|\d+:[\d.]+:)[a-f0-9]{64}$/.test(move.fingerprint) || ![...AUDIO_EXTENSIONS, 'lrc'].includes(extension(move.source)) || extension(move.source) !== extension(move.target) || extension(move.source) !== extension(move.temporary)) throw new Error('Unsafe rename data in the recovery journal.')
   for (const key of ['source', 'target', 'temporary'] as const) if (new Set(value.moves.map(move => syncKey(move[key]))).size !== value.moves.length) throw new Error('Duplicate rename paths in the recovery journal.')
   for (const patch of value.patches) if (!safe(patch.path) || !/\.m3u8?$/i.test(patch.path) || (patch.before !== null && !data(patch.before)) || !data(patch.after)) throw new Error('Unsafe playlist data in the recovery journal.')
   return value
@@ -71,10 +84,10 @@ export async function executeJournal(disk: SyncDisk, initial: SyncJournal, initi
     const source = await disk.readFresh(from), target = await disk.readFresh(to)
     if (!!source === !!target) throw new Error(`Recovery cannot choose safely between ${from} and ${to}. Review the files before retrying.`)
     const file = source ?? target!
-    if (await fingerprint(file) !== move.fingerprint) throw new Error(`A file changed outside Meloark: ${source ? from : to}. Sync stopped.`)
+    if (!await matchesFingerprint(file, move.fingerprint, !source || from !== move.source)) throw new Error(`A file changed outside Meloark: ${source ? from : to}. Sync stopped.`)
     if (source) await disk.moveFile(from, to)
     const verified = await disk.readFresh(to)
-    if (!verified || await disk.readFresh(from) || await fingerprint(verified) !== move.fingerprint) throw new Error(`Rename could not be verified: ${to}. Recovery data was preserved.`)
+    if (!verified || await disk.readFresh(from) || !await matchesFingerprint(verified, move.fingerprint, true)) throw new Error(`Rename could not be verified: ${to}. Recovery data was preserved.`)
   }
   if (journal.phase === 'staging') {
     for (const move of journal.moves) await relocate(move.source, move.temporary, move)
@@ -92,7 +105,7 @@ export async function executeJournal(disk: SyncDisk, initial: SyncJournal, initi
     }
     await save('complete')
   }
-  for (const move of journal.moves) { const file = await disk.readFresh(move.target); if (!file || await fingerprint(file) !== move.fingerprint) throw new Error(`Final file verification failed: ${move.target}`) }
+  for (const move of journal.moves) { const file = await disk.readFresh(move.target); if (!file || !await matchesFingerprint(file, move.fingerprint, true)) throw new Error(`Final file verification failed: ${move.target}`) }
   for (const patch of journal.patches) { const file = await disk.readFresh(patch.path); if (!file || !equalBytes(new Uint8Array(await file.arrayBuffer()), new Uint8Array(patch.after))) throw new Error(`Final playlist verification failed: ${patch.path}`) }
   return journal
 }

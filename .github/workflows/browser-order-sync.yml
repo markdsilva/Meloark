@@ -27,7 +27,7 @@ jobs:
       - name: Check installed native Chromium
         run: google-chrome --version
       - name: Native dialog test helpers
-        run: sudo apt-get update && sudo apt-get install -y xdotool imagemagick openbox
+        run: sudo apt-get update && sudo apt-get install -y xdotool imagemagick openbox ffmpeg
       - name: Browser flows and disposable native-file sync
         run: npm run test:e2e -- --project=chromium --grep-invert='native folder rename' --output=test-results/browser
       - name: Native folder sync on an isolated display
@@ -36,6 +36,9 @@ jobs:
       - name: Built static assets for the Cloudflare preview
         if: ${{ !cancelled() }}
         run: MELOARK_TEST_BUILD=1 npm run test:e2e -- tests/e2e/production-smoke.spec.ts --project=chromium --output=test-results/production
+      - name: Native sync from the production bundle
+        if: ${{ !cancelled() }}
+        run: MELOARK_TEST_BUILD=1 xvfb-run --auto-servernum --server-args='-screen 0 1920x1200x24' sh -c 'openbox >/tmp/meloark-production-window-manager.log 2>&1 & npm run test:e2e -- tests/e2e/native-order-sync.spec.ts --project=chromium --workers=1 --output=test-results/production-native'
       - uses: actions/upload-artifact@v4
         if: always()
         with:

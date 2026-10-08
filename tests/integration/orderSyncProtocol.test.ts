@@ -3,7 +3,7 @@ import { File as NativeFile } from 'node:buffer'
 import { webcrypto } from 'node:crypto'
 import { JOURNAL_PATH } from '../../src/domain/orderSync'
 import { equalBytes } from '../../src/platform/filesystem/saveProtocol'
-import { executeJournal, journalBytes, parseJournal, prepareJournal, readJournal, type SyncDisk, type SyncJournal } from '../../src/platform/filesystem/orderSyncProtocol'
+import { executeJournal, fingerprint, journalBytes, parseJournal, prepareJournal, readJournal, type SyncDisk, type SyncJournal } from '../../src/platform/filesystem/orderSyncProtocol'
 
 function fixture() {
   const files = new Map<string, File>([
@@ -30,6 +30,48 @@ function fixture() {
 }
 beforeEach(() => { vi.stubGlobal('crypto', webcrypto) })
 describe('recoverable native rename protocol', () => {
+  it('accepts native timestamp changes while verifying all audio bytes', async () => {
+    const t = fixture(), journal = await t.make()
+    t.disk.moveFile = async (from, to) => {
+      const file = t.files.get(from)!
+      t.files.set(to, new NativeFile([await file.arrayBuffer()], to, { lastModified: Date.now() }) as unknown as File)
+      t.files.delete(from)
+    }
+    await executeJournal(t.disk, journal, null, async () => {})
+    expect(await t.files.get('01 - Same.wav')!.text()).toBe('second audio')
+    expect(await t.files.get('02 - Same.wav')!.text()).toBe('first audio')
+  })
+  it('detects changed middle bytes even if size and modification time are preserved', async () => {
+    const bytes = new Uint8Array(3 * 1024 * 1024)
+    const before = new NativeFile([bytes], 'large.flac', { lastModified: 10 }) as unknown as File
+    bytes[bytes.length / 2] = 1
+    const after = new NativeFile([bytes], 'large.flac', { lastModified: 10 }) as unknown as File
+    expect(await fingerprint(after)).not.toBe(await fingerprint(before))
+  })
+  it('recovers an older journal after a staged native rename changed its timestamp', async () => {
+    const t = fixture(), journal = await t.make()
+    for (const move of journal.moves) {
+      const file = t.files.get(move.source)!
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const { hashBytes } = await import('../../src/platform/filesystem/saveProtocol')
+      move.fingerprint = `${file.size}:${file.lastModified}:${await hashBytes(bytes)}`
+    }
+    const first = journal.moves[0], file = t.files.get(first.source)!
+    t.files.set(first.temporary, new NativeFile([await file.arrayBuffer()], first.temporary, { lastModified: 999 }) as unknown as File)
+    t.files.delete(first.source)
+    const bytes = journalBytes(journal)
+    t.files.set(JOURNAL_PATH, new NativeFile([bytes], JOURNAL_PATH) as unknown as File)
+    await executeJournal(t.disk, journal, bytes, async () => {})
+    expect(await t.files.get('02 - Same.wav')!.text()).toBe('first audio')
+  })
+  it('keeps recovery data if native rename changed content', async () => {
+    const t = fixture(), journal = await t.make()
+    t.disk.moveFile = async (from, to) => {
+      t.files.set(to, new NativeFile(['corrupt audio'], to) as unknown as File); t.files.delete(from)
+    }
+    await expect(executeJournal(t.disk, journal, null, async () => {})).rejects.toThrow('Rename could not be verified')
+    expect(t.files.has(JOURNAL_PATH)).toBe(true)
+  })
   it('handles a swap cycle and commits only verified playlists', async () => {
     const t = fixture(), journal = await t.make(), saved: SyncJournal[] = []
     const done = await executeJournal(t.disk, journal, null, async value => { saved.push(value) })

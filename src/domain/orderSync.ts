@@ -20,7 +20,9 @@ export function planNames(entries: PlaylistEntry[], tracks: Record<string, Track
   const idSet = new Set(ids), fileKeys = new Map<string, string[]>()
   for (const path of files) { const key = syncKey(path); fileKeys.set(key, [...fileKeys.get(key) ?? [], path]) }
   if (!inventory.length || ids.some(id => !id) || idSet.size !== ids.length || ids.length !== inventory.length || inventory.some(track => !idSet.has(track.id))) throw new Error('Filename sync needs every audio file in exactly one folder, once each. Refresh and review the folder inventory.')
-  const width = Math.max(2, String(entries.length).length)
+  // Retain the folder's existing padding (001 stays 001) instead of renaming an
+  // already numbered collection merely to change the number of leading zeros.
+  const width = inventory.reduce((width, track) => Math.max(width, filename(track.path).match(/^(\d+)[ ._-]+/)?.[1].length ?? 0), Math.max(2, String(entries.length).length))
   const targets = new Set<string>(), sources = new Set<string>(), intents: RenameIntent[] = []
   entries.forEach((entry, index) => {
     const track = tracks[entry.trackId!]

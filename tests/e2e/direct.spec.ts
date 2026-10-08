@@ -54,6 +54,8 @@ async function connectFixture(page: Page) {
   })
   await page.goto('/')
   await page.getByRole('button', { name: 'Choose a music folder' }).click()
+  await expect(page.getByRole('dialog', { name: 'Set up Temporary test library' })).toBeVisible()
+  await page.getByRole('button', { name: 'Browse first', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Local', exact: true })).toBeVisible()
   return { directory, audio, writes, cleanup: async () => {
     const target = resolve(directory), base = resolve(tmpdir()) + sep
