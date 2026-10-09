@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect as baseExpect } from '@playwright/test'
 import { mkdtemp, readFile, writeFile, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -8,15 +8,20 @@ import { wavSample } from '../fixtures/audio'
 
 const execute = promisify(execFile)
 const key = (...keys: string[]) => execute('xdotool', ['key', '--clearmodifiers', ...keys])
+// Native writable-stream close and content checks can outlast the default
+// five seconds on a shared runner. Keep every exact byte/state assertion and
+// wait for completion, rather than assuming rename means the batch is saved.
+const expect = baseExpect.configure({ timeout: 30_000 })
 // The Linux CI display selects the real native folder dialog. No JS handle
 // replacement, OPFS, permission override or experimental browser flag is used.
 for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'numbered' : 'unnumbered'}, guided setup, dependent playlists, sidecars, playback and reload`, async ({ playwright }, info) => {
   test.skip(info.project.name !== 'chromium' || process.platform !== 'linux' || process.env.MELOARK_NATIVE_SYNC_TEST !== '1', 'Opt-in Linux native picker test needs X11/xdotool and only uses disposable files; Windows acceptance is manual.')
-  test.setTimeout(90000)
+  test.setTimeout(180_000)
   const directory = await mkdtemp(join(tmpdir(), 'meloark-native-sync-'))
   const profile = await mkdtemp(join(tmpdir(), 'meloark-native-profile-'))
   const codec = numbered ? 'flac' : 'wav'
-  const audio = new Map(['Alpha', 'Beta', 'Gamma'].map((name, i) => [name, Buffer.from(wavSample(8 + i))]))
+  // Keep playback on the same recording throughout a slow native write.
+  const audio = new Map(['Alpha', 'Beta', 'Gamma'].map((name, i) => [name, Buffer.from(wavSample(60 + i))]))
   const prefix = (number: number) => String(number).padStart(numbered ? 3 : 2, '0')
   const originalName = (name: string) => numbered ? `${String(['Alpha', 'Beta', 'Gamma'].indexOf(name) + 1).padStart(3, '0')} - ${name}` : name
   for (const [name, bytes] of audio) {
@@ -32,8 +37,8 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
   await writeFile(join(directory, `${originalName('Alpha')}.lrc`), '[00:00]A local lyric\n')
   await writeFile(join(directory, 'Other.m3u8'), `#EXTM3U\r\n#keep this comment\r\n${originalName('Alpha')}.${codec}\r\n${originalName('Alpha')}.${codec}\r\n${originalName('Beta')}.${codec}\r\n`)
   const browser = await playwright.chromium.launchPersistentContext(profile, { executablePath: process.env.MELOARK_CHROMIUM_EXECUTABLE, headless: false, viewport: { width: 1440, height: 1000 } })
+  const page = await browser.newPage(), errors: string[] = []
   try {
-    const page = await browser.newPage(), errors: string[] = []
     page.on('pageerror', error => errors.push(error.message))
     await page.goto(info.project.use.baseURL!)
     // Observe only; this still calls the real picker and returns its native handle.
@@ -82,7 +87,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
         // Accept its Save changes button on the fixed native-test viewport.
         await execute('xdotool', ['mousemove', '--window', window, String(Math.round(windowWidth / 2 + 140)), '215', 'click', '1'])
         return false
-      }, { timeout: 10000 }).toBe(true)
+      }, { timeout: 30_000 }).toBe(true)
       await expect(page.getByText('Saved to file', { exact: true })).toBeVisible()
       expect(await readFile(join(directory, 'First order.m3u8'), 'utf-8')).toBe(expected)
       expect(await readFile(join(directory, `${originalName('Alpha')}.${codec}`))).toEqual(audio.get('Alpha'))
@@ -134,6 +139,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
     await expect(page.locator('.seek')).toContainText('0:03')
     await page.getByRole('button', { name: 'Play', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible()
+    await expect(page.locator('.now-playing strong')).toHaveText('Alpha')
     await page.getByRole('row').filter({ has: alpha }).click()
     await page.getByRole('row').filter({ has: alpha }).press('Alt+ArrowDown')
     await expect.poll(async () => (await snapshot()).paths).toEqual([`${prefix(1)} - Beta.${codec}`, `${prefix(2)} - Alpha.${codec}`, `${prefix(3)} - Gamma.${codec}`])
@@ -142,6 +148,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
     await page.getByRole('slider', { name: 'Seek', exact: true }).fill('4')
     await expect(page.locator('.seek')).toContainText('0:04')
     await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible()
+    await expect(page.locator('.now-playing strong')).toHaveText('Alpha')
     await page.screenshot({ path: `test-results/native-sync-${codec}-desktop.png`, fullPage: true })
     await page.setViewportSize({ width: 390, height: 844 })
     await page.screenshot({ path: `test-results/native-sync-${codec}-mobile.png`, fullPage: true })
@@ -194,6 +201,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
       if (synced) {
         if (process.env.MELOARK_TEST_BUILD === '1') {
           // Resume the previously loaded snapshot after its disk name changed.
+          await expect(page.locator('.now-playing strong')).toHaveText(order[0])
           await page.getByRole('slider', { name: 'Seek', exact: true }).fill('2')
           await expect(page.locator('.seek')).toContainText('0:02')
           await page.getByRole('button', { name: 'Play', exact: true }).click()
@@ -246,9 +254,20 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
     await removeNumbers(['Alpha', 'Beta', 'Gamma'], numbered ? undefined : original.ids)
     expect(errors).toEqual([])
   } catch (error) {
-    console.log('Native test files:', await readdir(directory))
+    const files = await readdir(directory)
+    console.log('Native test files:', files)
+    const journal = await readFile(join(directory, '.meloark-order-sync.json'), 'utf-8').then(text => JSON.parse(text)).catch(() => null)
+    const diagnostics = {
+      files, pendingWrites: files.filter(name => name.endsWith('.crswap')),
+      alerts: await page.getByRole('alert').allTextContents().catch(() => []),
+      statuses: await page.getByRole('status').allTextContents().catch(() => []), pageErrors: errors,
+      journal: journal ? { phase: journal.phase, operation: journal.operation, patches: journal.patches.map((patch: { path: string }) => patch.path) } : null,
+    }
+    console.log('Native completion diagnostics:', JSON.stringify(diagnostics))
+    await info.attach('native-completion-diagnostics', { body: JSON.stringify(diagnostics, null, 2), contentType: 'application/json' })
     console.log('Native visible windows:', (await execute('xdotool', ['search', '--onlyvisible', '--name', '.']).catch(() => ({ stdout: '' }))).stdout)
-    await execute('import', ['-window', 'root', 'test-results/native-display-failure.png']).catch(() => undefined)
+    const display = info.outputPath('native-display-failure.png')
+    await execute('import', ['-window', 'root', display]).then(() => info.attach('native-display', { path: display, contentType: 'image/png' })).catch(() => undefined)
     throw error
   } finally { await browser.close(); await rm(directory, { recursive: true, force: true }); await rm(profile, { recursive: true, force: true }) }
 })

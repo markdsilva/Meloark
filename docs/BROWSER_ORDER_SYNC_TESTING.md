@@ -75,6 +75,8 @@ The uploaded music ZIP exceeded the attachment tool's 32 MiB transfer limit and 
 
 Final local results: 232 unit/integration tests passed; 44 standard Chromium flows passed; two native WAV/FLAC flows passed in development and again against the production bundle; the production portable smoke test passed. Type checks, lint, build and SEO checks passed. The personal-library flow was not run because the uploaded ZIP could not be transferred; production and native checks run separately from the standard browser suite.
 
+The follow-up CI fix waits for the lyric marker's opacity transition to finish before sampling its style. Native completion assertions allow up to 30 seconds for Chrome's writable-stream close and readback, with a three-minute cap per native flow; there are no blanket retries or removed assertions. The generated recordings last at least a minute, so playback cannot naturally end during a slow write, and the checks explicitly verify that Alpha stays loaded across its rename. On failure, each native test attaches its own display capture and a JSON summary of alerts, pending `.crswap` files, and journal phase/playlist paths. Application code and main are unchanged by this fix.
+
 ```powershell
 npm run lint
 npm run typecheck
