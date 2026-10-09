@@ -22,9 +22,9 @@ function fixture() {
       files.set(path, new NativeFile([new Uint8Array(bytes)], path) as unknown as File); step(true)
     },
   }
-  const make = () => prepareJournal(disk, { version: 1, token: 'test', libraryId: 'lib', sessionId: 'session', revision: 1, folder: '', order: ['b', 'a'],
-    moves: [{ source: '01 - Same.wav', temporary: '.meloark-test-0.wav', target: '02 - Same.wav', trackId: 'a' }, { source: '02 - Same.wav', temporary: '.meloark-test-1.wav', target: '01 - Same.wav', trackId: 'b' }],
-    patches: [{ path: 'List.m3u8', before: [...new TextEncoder().encode('#EXTM3U\n01 - Same.wav\n02 - Same.wav\n')], after: [...new TextEncoder().encode('#EXTM3U\n02 - Same.wav\n01 - Same.wav\n')] }],
+  const make = (removal = false) => prepareJournal(disk, { version: 1, token: 'test', libraryId: 'lib', sessionId: 'session', revision: 1, folder: '', order: ['b', 'a'], ...(removal ? { operation: 'remove-prefixes' as const } : {}),
+    moves: [{ source: '01 - Same.wav', temporary: '.meloark-test-0.wav', target: removal ? 'First.wav' : '02 - Same.wav', trackId: 'a' }, { source: '02 - Same.wav', temporary: '.meloark-test-1.wav', target: removal ? 'Second.wav' : '01 - Same.wav', trackId: 'b' }],
+    patches: [{ path: 'List.m3u8', before: [...new TextEncoder().encode('#EXTM3U\n01 - Same.wav\n02 - Same.wav\n')], after: [...new TextEncoder().encode(removal ? '#EXTM3U\nFirst.wav\nSecond.wav\n' : '#EXTM3U\n02 - Same.wav\n01 - Same.wav\n')] }],
   })
   return { files, disk, make, interrupt: (at: number, effect: boolean) => { operation = 0; failAt = at; after = effect }, reset: () => { failAt = -1 } }
 }
@@ -96,6 +96,18 @@ describe('recoverable native rename protocol', () => {
     expect(t.files.has(JOURNAL_PATH)).toBe(false)
     expect(await t.files.get('01 - Same.wav')!.text()).toBe('first audio')
   })
+  it.each(Array.from({ length: 9 }, (_, index) => index + 1).flatMap(at => [[at, false], [at, true]] as const))('recovers number removal at mutation %i (after effect: %s)', async (at, effect) => {
+    const t = fixture(), journal = await t.make(true); t.interrupt(at, effect)
+    await expect(executeJournal(t.disk, journal, null, async () => {})).rejects.toThrow('Injected interruption')
+    t.reset(); const persisted = await readJournal(t.disk)
+    const done = await executeJournal(t.disk, persisted?.journal ?? journal, persisted?.bytes ?? null, async () => {})
+    expect(done.operation).toBe('remove-prefixes')
+    expect(done.phase).toBe('complete')
+    expect(await t.files.get('First.wav')!.text()).toBe('first audio')
+    expect(await t.files.get('Second.wav')!.text()).toBe('second audio')
+    expect(await t.files.get('List.m3u8')!.text()).toBe('#EXTM3U\nFirst.wav\nSecond.wav\n')
+    expect([...t.files.keys()].filter(name => name.startsWith('.meloark-test-'))).toEqual([])
+  })
   it('stops on a foreign occupied target without overwriting it', async () => {
     const t = fixture(), journal = await t.make(); t.interrupt(4, false)
     await expect(executeJournal(t.disk, journal, null, async () => {})).rejects.toThrow()
@@ -117,5 +129,6 @@ describe('recoverable native rename protocol', () => {
     const t = fixture(), journal = await t.make()
     expect(() => parseJournal(journalBytes({ ...journal, moves: [{ ...journal.moves[0], target: '../outside.wav' }] }))).toThrow(/Unsafe/)
     expect(() => parseJournal(journalBytes({ ...journal, patches: [{ path: 'audio.wav', before: null, after: [] }] }))).toThrow(/Unsafe/)
+    expect(() => parseJournal(journalBytes({ ...journal, operation: 'delete' } as unknown as SyncJournal))).toThrow(/Unknown filename operation/)
   })
 })

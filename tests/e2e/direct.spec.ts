@@ -73,6 +73,7 @@ test('sync choices preview cleanly on desktop/mobile and a failed native capabil
     })
     await page.getByRole('button', { name: 'New playlist', exact: true }).click()
     await page.getByRole('radio', { name: /Numbered filenames \+ M3U8/ }).check()
+    await expect(page.getByRole('dialog')).toContainText('Preview only — arrange these 2 tracks by dragging in the Playlist tab after creating the playlist.')
     await expect(page.getByLabel('Filename changes preview')).toContainText('01 - A.wav')
     await page.getByLabel('Initial sync order', { exact: true }).selectOption('Local.m3u8')
     await expect(page.getByLabel('Order-authority playlist', { exact: true })).toHaveValue('Local.m3u8')
@@ -113,6 +114,42 @@ test('direct save verifies a temporary playlist and leaves audio bytes untouched
     await page.getByRole('button', { name: 'Undo', exact: true }).click()
     await expect(page.getByText('Unsaved draft', { exact: true })).toBeVisible()
     expect(fixture.writes).toHaveLength(1)
+  } finally { await fixture.cleanup() }
+})
+test('number removal requires a fresh confirmation when its preview changes, blocks collisions and can be cancelled', async ({ page }) => {
+  const fixture = await connectFixture(page)
+  try {
+    await page.getByRole('button', { name: 'Play playlist', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible()
+    // Model scanned numbered filenames for this UI-only check. No native
+    // rename is attempted; the real disk cases are in native-order-sync.
+    const changeNames = async (names: string[]) => page.evaluate(async names => {
+      const path = '/src/app/store.ts', { activeLibrary, updateLibrary } = await import(path)
+      updateLibrary(activeLibrary().id, (library: { tracks: Record<string, { path: string; filename: string }>; files: string[] }) => {
+        const renamed = new Map(Object.entries(library.tracks).map(([id, track], i) => [track.path, { id, path: names[i] }]))
+        return { ...library, files: library.files.map(path => renamed.get(path)?.path ?? path), tracks: Object.fromEntries(Object.entries(library.tracks).map(([id, track], i) => [id, { ...track, path: names[i], filename: names[i] }])) }
+      })
+    }, names)
+    await changeNames(['01 - A.wav', '02 - B.wav'])
+    await page.getByRole('button', { name: /^Actions for library / }).click()
+    await page.getByRole('menuitem', { name: 'Remove filename numbers…', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Remove filename numbers', exact: true })
+    const checkbox = dialog.getByRole('checkbox', { name: /I reviewed these changes/ }), remove = dialog.getByRole('button', { name: 'Remove numbers', exact: true })
+    await expect(remove).toBeDisabled()
+    await expect(checkbox).toBeDisabled()
+    await dialog.getByRole('button', { name: 'Stop playback', exact: true }).click()
+    await checkbox.check(); await expect(remove).toBeEnabled()
+    await changeNames(['03 - A.wav', '02 - B.wav'])
+    await expect(dialog.getByLabel('Number removal preview')).toContainText('03 - A.wav')
+    await expect(checkbox).not.toBeChecked(); await expect(remove).toBeDisabled()
+    await checkbox.check(); await expect(remove).toBeEnabled()
+    await changeNames(['03 - Same.wav', '02 - Same.wav'])
+    await expect(dialog.getByRole('alert')).toContainText('duplicate filenames')
+    await expect(remove).toBeDisabled()
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    expect(fixture.writes).toEqual([])
+    expect(await readFile(join(fixture.directory, 'A.wav'))).toEqual(fixture.audio)
+    expect(await readFile(join(fixture.directory, 'B.wav'))).toEqual(fixture.audio)
   } finally { await fixture.cleanup() }
 })
 test('external edits cause a conflict without overwriting the source', async ({ page }) => {

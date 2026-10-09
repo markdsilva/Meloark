@@ -3,7 +3,7 @@ import { disableOrderSync, pauseOrderSync, requestOrderSync, stopPlaybackAndSync
 import { useApp } from '../../app/store'
 import { Dialog } from '../shared/Dialog'
 
-export function SyncControls() {
+export function SyncControls({ removeNumbers }: { removeNumbers: (folder: string) => void }) {
   const library = useApp(s => s.libraries.find(item => item.id === s.activeLibrary))
   const session = library?.activePlaylist ? library.sessions[library.activePlaylist] : undefined
   const [settings, setSettings] = useState(false)
@@ -20,6 +20,8 @@ export function SyncControls() {
       <p>Every audio file in this folder appears once. Adding or removing playlist entries is available after disabling filename sync. Audio files are never deleted.</p>
       {sync.error && <p className="callout" role="alert">{sync.error}</p>}
       <p className="muted">Disabling keeps current filenames. Filename-only mode then becomes an unsaved M3U8 draft; it creates no file until you Save or Export.</p>
+      <p>Prefer unnumbered filenames? Review and remove the numbers while keeping your playlist order.</p>
+      <button className="button secondary" disabled={busy || !!library.syncRecovery} onClick={() => { setSettings(false); removeNumbers(sync.folder) }}>Remove filename numbers…</button>
       <div className="dialog-actions"><button className="button secondary" disabled={busy || !!library.syncRecovery} onClick={pauseOrderSync}>{sync.enabled ? 'Pause sync' : 'Resume sync'}</button><button className="button secondary" disabled={busy || !!library.syncRecovery} onClick={() => { if (disableOrderSync()) setSettings(false) }}>Disable filename sync</button></div>
     </Dialog>}
   </>

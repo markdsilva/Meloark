@@ -14,6 +14,36 @@ export function validFilename(name: string) {
   return !!name && !/[<>:"/\\|?*]/.test(name) && ![...name].some(char => char.charCodeAt(0) < 32) && !/[. ]$/.test(name) && !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name) && name.length <= 240
 }
 export interface RenameIntent { trackId?: string; source: string; temporary: string; target: string }
+export function planNumberRemoval(tracks: Record<string, Track>, folder: string, files: string[], token = newId()): RenameIntent[] {
+  const fileKeys = new Map(files.map(path => [syncKey(path), path]))
+  if (fileKeys.size !== files.length) throw new Error('The library contains case or Unicode-equivalent paths. Resolve them before renaming.')
+  const intents: RenameIntent[] = []
+  const targets = new Set<string>()
+  function add(source: string, target: string, trackId?: string) {
+    if (!validFilename(filename(target))) throw new Error(`A filename cannot be restored safely on Windows: ${filename(target)}`)
+    if (targets.has(syncKey(target))) throw new Error(`Removing numbers would create duplicate filenames: ${target}. Rename the conflicting files first.`)
+    targets.add(syncKey(target))
+    const suffix = filename(source).slice(filename(source).lastIndexOf('.'))
+    intents.push({ trackId, source, target, temporary: inFolder(folder, `.meloark-${token}-${intents.length}${suffix}`) })
+  }
+  for (const track of Object.values(tracks).filter(track => dirname(track.path) === folder)) {
+    const suffix = track.filename.slice(track.filename.lastIndexOf('.'))
+    const stem = filenameStem(track.path)
+    if (!stem) throw new Error(`Removing numbers would leave an empty filename: ${track.path}. Rename it first.`)
+    const target = inFolder(folder, stem + suffix)
+    if (target === track.path) continue
+    add(track.path, target, track.id)
+    const sidecar = fileKeys.get(syncKey(track.path.slice(0, -suffix.length) + '.lrc'))
+    if (sidecar) add(sidecar, target.slice(0, -suffix.length) + filename(sidecar).slice(-4))
+  }
+  const sources = new Set(intents.map(move => syncKey(move.source)))
+  if (sources.size !== intents.length) throw new Error('A lyric sidecar is shared by multiple audio files. Resolve it before removing numbers.')
+  for (const move of intents) {
+    if (fileKeys.has(syncKey(move.target)) && !sources.has(syncKey(move.target))) throw new Error(`An existing file occupies a target name: ${move.target}. Rename it first.`)
+    if (fileKeys.has(syncKey(move.temporary))) throw new Error('A temporary rename path already exists. Recover the interrupted operation first.')
+  }
+  return intents
+}
 export function planNames(entries: PlaylistEntry[], tracks: Record<string, Track>, folder: string, stems: Record<string, string>, files: string[], token = newId()): RenameIntent[] {
   const inventory = Object.values(tracks).filter(track => dirname(track.path) === folder)
   const ids = entries.map(entry => entry.trackId)

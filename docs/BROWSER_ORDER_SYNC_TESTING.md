@@ -16,6 +16,8 @@ Native support and write permission are verified on a disposable probe before mu
 
 Choosing a new folder now opens **Set up [folder name]** after scanning, showing the track, numbered-filename and playlist counts. The amber/charcoal setup cards offer M3U8 only, numbered filenames only, or both. **Browse first** keeps listening and browsing available without creating anything.
 
+The setup and New playlist lists are read-only previews. Their instructions explicitly say to drag in the **Playlist** tab afterward. **All tracks** now shows **Organize this folder** when there is no active playlist, opening the populated setup flow rather than requiring users to discover New playlist. With a populated playlist it shows **Arrange playlist**, taking users to the draggable list. An empty playlist instead explains how to add songs with **+**. Listening remains available before setup.
+
 For the drag-and-sync workflow, choose **Numbered filenames + M3U8**, review the filenames, confirm automatic renaming and choose **Set up playlist**. Every track in the selected audio folder is included. Existing three-digit numbering keeps its padding. The default M3U8-only setup includes the selected folder's tracks in filename order and saves the playlist without renaming audio; ordinary M3U8 edits continue to use Save playlist.
 
 Filename-sync playback uses an independent in-memory copy of the currently playing track up to 128 MiB. Dragging, filename changes, playlist updates, seeking and playback can then happen together. Larger recordings, or a disk-backed recording loaded before sync was enabled, wait for **Stop & sync** rather than allocating unbounded memory.
@@ -57,11 +59,21 @@ Use a **copy** of a small music folder for the first test. Include three or more
 9. Test another subfolder, filters and sorting, touch viewport, context menus, keyboard moves, sidebar, player and lyrics panel. Filtered/sorted views must explain why dragging is disabled. On touch, **Reorder tracks** provides deliberate whole-row dragging; turn it off for scrolling.
 10. Test portable file selection in Firefox/Safari or by selecting files instead of a direct folder. Only M3U8-only should be available; Save/Export/playback and existing drafts should continue to work.
 
+## Removing filename numbers
+
+Open **Sync settings → Remove filename numbers…**, or the library's **… → Remove filename numbers…** menu for a folder that already has numbered files. Select an audio folder, review the audio and matching LRC changes, confirm and choose **Remove numbers**. One numeric prefix and its separators are removed; a numeric title without a separator, such as `1984.flac`, stays unchanged. The preview is authoritative and requires confirmation again if it changes. For disk-backed playback, the dialog offers **Stop playback** before allowing removal; memory-backed playback can continue.
+
+After success, filename sync for that folder is disabled. A dedicated M3U8 saves the current order, including queued reorders. Existing dependent playlists keep their order, duplicates, comments and encoding while their references change. A filename-only playlist becomes an unsaved M3U8 draft; Save or Export it afterward to preserve that order outside Meloark. Other folders' sync settings remain intact. Subsequent playlist edits use the ordinary draft/save workflow and do not reapply numbering.
+
+Validate removal on copies: check audio byte hashes, sidecar names, dependent playlist references, stable metadata, playback/seek, reload and Undo/Redo. Test duplicate restored names, case/Unicode collisions, existing targets, denied write permission and externally changed files: these must block before music moves. On a disposable folder, interrupt removal and recover after reload. Recovery must complete the same removal and turn off numbering; retain the journal and temporary files until then. Also test already numbered folders without an active sync playlist through the library menu.
+
 ## Automated checks
 
-The previous branch acceptance [run 37750763051](https://github.com/markdsilva/Meloark/actions/runs/37750763051) covered the original implementation. The current changes were validated locally in the Codex cloud environment with 189 unit/integration tests, 42 Chromium browser flows and real native folder tests using generated unnumbered WAV and numbered FLAC recordings. Native checks verify unchanged audio bytes, playlist-only setup, drag sync, dependent M3U8 references, LRC renaming, Undo, uninterrupted playback/seek, reload and recovery after a real move was interrupted, including loss of the remembered sync session. The production bundle is checked separately, including native renaming.
+The previous branch acceptance [run 37750763051](https://github.com/markdsilva/Meloark/actions/runs/37750763051) covered the original implementation. Local validation for these changes covers unit/integration tests, Chromium browser flows and real native folder tests using generated unnumbered WAV and numbered FLAC recordings. Native checks verify unchanged audio bytes, playlist-only setup, drag sync, dependent M3U8 references, LRC renaming, Undo, playback/seek, reload, number removal with and without a sync owner, and recovery after a real move was interrupted, including loss of the remembered sync session. The production bundle is checked separately, including native renaming and resuming playback after number removal. Protocol fault tests interrupt removal before and after all nine mutations, and app tests verify cleanup recovery, queued order preservation, ordinary drafts, and independent folders.
 
 The uploaded music ZIP exceeded the attachment tool's 32 MiB transfer limit and could not be read; these results use generated audio, not that collection. Windows filesystem acceptance still requires the manual branch-preview checks above.
+
+Final local results: 232 unit/integration tests passed; 44 standard Chromium flows passed; two native WAV/FLAC flows passed in development and again against the production bundle; the production portable smoke test passed. Type checks, lint, build and SEO checks passed. The personal-library flow was not run because the uploaded ZIP could not be transferred; production and native checks run separately from the standard browser suite.
 
 ```powershell
 npm run lint

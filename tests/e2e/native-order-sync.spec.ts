@@ -90,6 +90,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
       await page.getByRole('button', { name: 'New playlist', exact: true }).click()
     }
     await page.getByRole('radio', { name: /Numbered filenames \+ M3U8/ }).check()
+    await expect(page.getByRole('dialog')).toContainText(`Preview only — arrange these 3 tracks by dragging in the Playlist tab after ${numbered ? 'creating the playlist' : 'setup'}.`)
     await page.getByLabel('Playlist name', { exact: true }).fill('Ordered')
     await page.getByRole('checkbox', { name: /I reviewed this folder/ }).check()
     await page.screenshot({ path: `test-results/native-sync-${codec}-preview.png`, fullPage: true })
@@ -149,7 +150,73 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
     await expect(page.getByText('Synced', { exact: true })).toBeVisible()
     expect((await snapshot()).ids).toEqual(original.ids)
     expect(await readdir(directory)).not.toContain('.meloark-order-sync.json')
-    if (process.env.MELOARK_TEST_BUILD === '1') { expect(errors).toEqual([]); return }
+    async function removeNumbers(order: string[], expectedIds?: string[]) {
+      const synced = await page.getByRole('button', { name: 'Sync settings', exact: true }).count() > 0
+      if (synced) {
+        await page.getByRole('button', { name: 'Play playlist', exact: true }).click()
+        await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible()
+        await page.getByRole('button', { name: 'Pause', exact: true }).click()
+        await page.getByRole('button', { name: 'Sync settings', exact: true }).click()
+        await page.getByRole('button', { name: 'Remove filename numbers…', exact: true }).click()
+      } else {
+        await page.getByRole('button', { name: `Actions for library ${directory.split('/').at(-1)}`, exact: true }).click()
+        await page.getByRole('menuitem', { name: 'Remove filename numbers…', exact: true }).click()
+      }
+      const dialog = page.getByRole('dialog', { name: 'Remove filename numbers', exact: true })
+      await expect(dialog.getByLabel('Number removal preview')).toContainText(`→ Alpha.${codec}`)
+      await expect(dialog.getByRole('button', { name: 'Remove numbers', exact: true })).toBeDisabled()
+      await dialog.getByRole('checkbox', { name: /I reviewed these changes/ }).check()
+      await page.screenshot({ path: `test-results/native-removal-${codec}-desktop.png`, fullPage: true })
+      await page.setViewportSize({ width: 320, height: 844 })
+      expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      await page.screenshot({ path: `test-results/native-removal-${codec}-mobile.png`, fullPage: true })
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      if (!numbered && process.env.MELOARK_TEST_BUILD !== '1') {
+        // Interrupt removal itself after one real move, then recover after reload.
+        await page.evaluate(async () => {
+          const path = '/src/app/store.ts', { sources, activeLibrary } = await import(path)
+          const source = sources.get(activeLibrary().id), original = source.moveFile.bind(source)
+          source.moveFile = async (from: string, to: string) => { await original(from, to); throw new Error('Interrupted number removal') }
+        })
+        await dialog.getByRole('button', { name: 'Remove numbers', exact: true }).click()
+        await expect(dialog.getByRole('alert').first()).toContainText('Interrupted number removal')
+        expect(JSON.parse(await readFile(join(directory, '.meloark-order-sync.json'), 'utf-8')).operation).toBe('remove-prefixes')
+        await page.reload()
+        await page.getByRole('button', { name: 'Recover filename sync', exact: true }).click()
+      } else await dialog.getByRole('button', { name: 'Remove numbers', exact: true }).click()
+      await expect(dialog).toHaveCount(0)
+      await expect.poll(async () => (await readdir(directory)).some(name => name.startsWith('.meloark-'))).toBe(false)
+      await expect(page.getByRole('button', { name: 'Sync settings', exact: true })).toHaveCount(0)
+      expect(await readFile(join(directory, 'Ordered.m3u8'), 'utf-8')).toBe(`#EXTM3U\n${order.map(name => `${name}.${codec}\n`).join('')}`)
+      expect(await readFile(join(directory, 'Other.m3u8'), 'utf-8')).toBe(`#EXTM3U\r\n#keep this comment\r\nAlpha.${codec}\r\nAlpha.${codec}\r\nBeta.${codec}\r\n`)
+      expect(await readFile(join(directory, 'Alpha.lrc'), 'utf-8')).toBe('[00:00]A local lyric\n')
+      for (const [name, bytes] of audio) expect(await readFile(join(directory, `${name}.${codec}`))).toEqual(bytes)
+      if (synced) {
+        if (process.env.MELOARK_TEST_BUILD === '1') {
+          // Resume the previously loaded snapshot after its disk name changed.
+          await page.getByRole('slider', { name: 'Seek', exact: true }).fill('2')
+          await expect(page.locator('.seek')).toContainText('0:02')
+          await page.getByRole('button', { name: 'Play', exact: true }).click()
+        } else await page.getByRole('button', { name: 'Play playlist', exact: true }).click()
+        await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible()
+        if (expectedIds) expect((await snapshot()).ids).toEqual(expectedIds)
+      }
+      await page.reload()
+      expect(await readdir(directory)).not.toContain('.meloark-order-sync.json')
+      if (synced) {
+        await page.getByRole('button', { name: 'Active playlist', exact: true }).click()
+        await expect(page.locator('.track-title strong')).toHaveText(order)
+        if (expectedIds) expect((await snapshot()).ids).toEqual(expectedIds)
+        const first = page.getByRole('row').filter({ has: page.locator('.track-title').filter({ hasText: new RegExp(`^${order[0]}`) }) })
+        await first.click(); await first.press('Alt+ArrowDown')
+        await expect(page.locator('.track-title strong')).toHaveText([order[1], order[0], order[2]])
+        // Subsequent draft edits no longer number files or rewrite the M3U8.
+        expect(await readFile(join(directory, 'Ordered.m3u8'), 'utf-8')).toBe(`#EXTM3U\n${order.map(name => `${name}.${codec}\n`).join('')}`)
+        await expect(page.getByText('Unsaved draft', { exact: true })).toBeVisible()
+      }
+      for (const [name, bytes] of audio) expect(await readFile(join(directory, `${name}.${codec}`))).toEqual(bytes)
+    }
+    if (process.env.MELOARK_TEST_BUILD === '1') { await removeNumbers(['Beta', 'Alpha', 'Gamma'], original.ids); expect(errors).toEqual([]); return }
     // Interrupt after a real native move, preserving the exact disk journal.
     await page.evaluate(async () => {
       const path = '/src/app/store.ts', { sources, activeLibrary } = await import(path)
@@ -176,6 +243,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
       await expect(page.locator('.track-title strong')).toHaveText(['Alpha', 'Beta', 'Gamma'])
     } else expect((await snapshot()).ids).toEqual(original.ids)
     for (const [index, name] of ['Alpha', 'Beta', 'Gamma'].entries()) expect(await readFile(join(directory, `${prefix(index + 1)} - ${name}.${codec}`))).toEqual(audio.get(name))
+    await removeNumbers(['Alpha', 'Beta', 'Gamma'], numbered ? undefined : original.ids)
     expect(errors).toEqual([])
   } catch (error) {
     console.log('Native test files:', await readdir(directory))

@@ -1,6 +1,7 @@
 import { activeLibrary, activeSession, message, notify, persistNow, scanLibrary, sources, updateLibrary, useApp } from './store'
 import { AUDIO_EXTENSIONS, extension, dirname, filename, newId, naturalCompare, isDirty, type PlaylistEntry, type PlaylistSession } from '../domain/models'
-import { filenameStem, inFolder, patchReferences, planNames, validFilename } from '../domain/orderSync'
+import { filenameStem, inFolder, patchReferences, planNames, planNumberRemoval, validFilename, type RenameIntent } from '../domain/orderSync'
+import { filenameIndex } from '../domain/filenameIndex'
 import { emptyDocument, MAX_BYTES, serializePlaylist } from '../playlists/codec'
 import { relativeReference } from '../playlists/paths'
 import { DirectSource } from '../platform/filesystem/direct'
@@ -83,7 +84,7 @@ export async function checkRecovery(libraryId: string): Promise<boolean> {
     if (!disk && !cached) return false
     const journal = disk?.journal ?? cached!
     updateLibrary(libraryId, library => ({ ...library, connected: true, scanning: false, syncRecovery: 'An interrupted filename sync was found. Recover it before scanning, saving, or renaming files.',
-      sessions: Object.fromEntries(Object.entries(library.sessions).map(([id, session]) => [id, session.sync ? { ...session, sync: { ...session.sync, status: 'recovery' as const, error: 'Recovery is required before another sync.' } } : session])) }))
+      sessions: Object.fromEntries(Object.entries(library.sessions).map(([id, session]) => [id, session.sync && id === journal.sessionId ? { ...session, sync: { ...session.sync, status: 'recovery' as const, error: 'Recovery is required before another sync.' } } : session])) }))
     if (journal.libraryId !== libraryId) notify('This folder contains an interrupted sync from another browser session. Recover its recorded file changes, then review the folder to set up sync again.')
     return true
   } catch (error) {
@@ -136,34 +137,40 @@ export async function createSyncedPlaylist(name: string, folder: string, mode: '
   scheduleSync(library.id, session.id)
 }
 
-async function makeJournal(libraryId: string, sessionId: string, source: DirectSource) {
-  const library = useApp.getState().libraries.find(item => item.id === libraryId)!, session = library.sessions[sessionId], sync = session.sync!
-  if (!library.connected || library.scanning || library.scanError || useApp.getState().busy) throw new Error('Wait for a complete scan and other file operations before syncing.')
-  await assertOwnership(libraryId, sync.folder, sessionId)
+async function makeJournal(libraryId: string, sessionId: string, source: DirectSource, removal?: { folder: string; reviewed: RenameIntent[] }) {
+  const library = useApp.getState().libraries.find(item => item.id === libraryId)!, session = library.sessions[sessionId], sync = session?.sync
+  const folder = removal?.folder ?? sync!.folder
+  if (!library.connected || library.scanning || library.scanError || !removal && useApp.getState().busy) throw new Error('Wait for a complete scan and other file operations before syncing.')
+  await assertOwnership(libraryId, folder, sessionId)
   // Rescan the actual directory before every batch, not only remembered paths.
   const inventory = new Map<string, { size: number; lastModified: number }>()
   for await (const file of source.scan(new AbortController().signal)) inventory.set(file.path, file)
   const files = [...inventory.keys()]
   const knownAudio = new Set(Object.values(library.tracks).map(track => track.path))
-  if (files.some(path => dirname(path) === sync.folder && AUDIO_EXTENSIONS.has(extension(path)) && !knownAudio.has(path)) || Object.values(library.tracks).some(track => dirname(track.path) === sync.folder && !inventory.has(track.path))) throw new Error('Audio files were added, removed or renamed outside Meloark. Disable sync and refresh to review the new inventory.')
-  for (const track of Object.values(library.tracks).filter(track => dirname(track.path) === sync.folder)) {
+  if (files.some(path => dirname(path) === folder && AUDIO_EXTENSIONS.has(extension(path)) && !knownAudio.has(path)) || Object.values(library.tracks).some(track => dirname(track.path) === folder && !inventory.has(track.path))) throw new Error('Audio files were added, removed or renamed outside Meloark. Disable sync and refresh to review the new inventory.')
+  for (const track of Object.values(library.tracks).filter(track => dirname(track.path) === folder)) {
     const actual = inventory.get(track.path)!
     if (actual.size !== track.size || actual.lastModified !== track.lastModified) throw new Error('An audio file changed outside Meloark. Disable sync and refresh to review it before renaming.')
   }
-  const token = newId(), moves = planNames(session.entries, library.tracks, sync.folder, sync.stems, files, token), mapping = new Map(moves.map(move => [move.source, move.target]))
+  const token = newId(), moves = removal ? planNumberRemoval(library.tracks, folder, files, token) : planNames(session.entries, library.tracks, folder, sync!.stems, files, token)
+  if (removal) {
+    const signature = (items: RenameIntent[]) => JSON.stringify(items.map(({ source, target, trackId }) => [source, target, trackId]).sort())
+    if (!moves.length || signature(moves) !== signature(removal.reviewed)) throw new Error('The filename preview changed. Close this dialog, refresh the library and review it again.')
+  }
+  const mapping = new Map(moves.map(move => [move.source, move.target]))
   const paths = new Set(Object.values(library.tracks).map(track => track.path)), patches: SyncJournal['patches'] = []
   for (const path of files.filter(path => /\.m3u8?$/i.test(path))) {
     const file = await source.readFresh(path)
     if (!file || file.size > MAX_BYTES) throw new Error(`Cannot inspect playlist ${path}.`)
     const before = new Uint8Array(await file.arrayBuffer())
-    if (sync.mode === 'both' && session.document?.path === path) {
+    if (sync?.mode === 'both' && session.document?.path === path) {
       if (!session.baseline || !equalBytes(session.baseline, before)) throw new Error('The order-authority playlist changed outside Meloark. Disable sync and reload it before enabling again.')
       continue
     }
     const after = patchReferences(before, path, paths, mapping)
     if (!equalBytes(before, after)) patches.push({ path, before: [...before], after: [...after] })
   }
-  if (sync.mode === 'both' && session.document) {
+  if (sync?.mode === 'both' && session.document) {
     const entries = session.entries.map(entry => ({ ...entry, path: mapping.get(entry.path!) ?? entry.path }))
     const after = serializePlaylist(session.document, entries)
     if (!session.baseline || !equalBytes(session.baseline, after)) patches.push({ path: session.document.path, before: session.baseline ? [...session.baseline] : null, after: [...after] })
@@ -173,7 +180,36 @@ async function makeJournal(libraryId: string, sessionId: string, source: DirectS
     const other = Object.values(library.sessions).find(item => item.document?.path === patch.path && item.id !== sessionId)
     if (other?.status === 'unverified' || (other?.baseline && !equalBytes(other.baseline, new Uint8Array(patch.before ?? [])))) throw new Error(`An open playlist needs reconciliation first: ${patch.path}`)
   }
-  return prepareJournal(source, { version: 1, token, libraryId, sessionId, folder: sync.folder, revision: session.revision, moves, patches, order: session.entries.map(entry => entry.id) })
+  return prepareJournal(source, { version: 1, token, libraryId, sessionId, folder, revision: session?.revision ?? 0, moves, patches, order: session?.entries.map(entry => entry.id) ?? [], ...(removal ? { operation: 'remove-prefixes' as const } : {}) })
+}
+
+export async function removeFilenameNumbers(libraryId: string, folder: string, reviewed: RenameIntent[]) {
+  const library = useApp.getState().libraries.find(item => item.id === libraryId), source = sources.get(libraryId)
+  if (!library?.connected || library.scanning || library.scanError || library.syncRecovery || useApp.getState().busy || running.has(libraryId) || !(source instanceof DirectSource)) throw new Error('Reconnect and finish scanning or recovery before removing filename numbers.')
+  const owner = Object.values(library.sessions).find(session => session.sync?.folder === folder)
+  const sessionId = owner?.id ?? `@remove-numbers:${newId()}`
+  clearTimeout(timers.get(libraryId))
+  running.add(libraryId); useApp.setState({ busy: true })
+  try {
+    if (!await source.requestAccess('write')) throw new Error('Write permission was not granted. Filenames were kept.')
+    await withFilesystemLock(async () => {
+      const playback = usePlayer.getState()
+      if (playback.current && playback.context?.libraryId === libraryId && !playback.renameSafe) throw new Error('Stop playback before removing filename numbers from this disk-backed track.')
+      if (await readJournal(source) || await loadSyncJournal(libraryId)) throw new Error('Recover the interrupted filename operation first.')
+      const journal = await makeJournal(libraryId, sessionId, source, { folder, reviewed })
+      await source.probeRename(folder)
+      const done = await executeJournal(source, journal, null, saveSyncJournal)
+      await commitJournal(done, source)
+    })
+    notify('Filename numbers removed. Playlist order was kept and automatic numbering is off.')
+  } catch (error) {
+    if (await checkRecovery(libraryId)) updateLibrary(libraryId, current => ({ ...current, syncRecovery: `${message(error)} Recovery data is preserved. Recover filename sync to finish removing numbers.` }))
+    throw error
+  } finally {
+    running.delete(libraryId); useApp.setState({ busy: false })
+    const current = useApp.getState().libraries.find(item => item.id === libraryId)
+    for (const session of Object.values(current?.sessions ?? {})) if (session.sync?.enabled && session.sync.status === 'queued') scheduleSync(libraryId, session.id)
+  }
 }
 
 async function commitJournal(journal: SyncJournal, source: DirectSource) {
@@ -192,7 +228,7 @@ async function commitJournal(journal: SyncJournal, source: DirectSource) {
       sessions: Object.fromEntries(Object.entries(library.sessions).map(([id, session]) => [id, id === journal.sessionId && session.sync ? { ...session, sync: { ...session.sync, status: isDirty(session) ? 'queued' as const : 'synced' as const, error: undefined } } : session])) }
     const tracks = Object.fromEntries(Object.entries(library.tracks).map(([id, track]) => {
       const path = mapping.get(track.path), file = stats.get(id)
-      return [id, path ? { ...track, path, filename: filename(path), index: Number(filename(path).match(/^\d+/)?.[0]), size: file?.size ?? track.size, lastModified: file?.lastModified ?? track.lastModified } : track]
+      return [id, path ? { ...track, path, filename: filename(path), index: filenameIndex(path).index, size: file?.size ?? track.size, lastModified: file?.lastModified ?? track.lastModified } : track]
     }))
     const sessions = Object.fromEntries(Object.entries(library.sessions).map(([id, session]) => {
       const entries = mapEntries(session.entries, session.document?.path), saved = mapEntries(session.saved, session.document?.path)
@@ -206,6 +242,14 @@ async function commitJournal(journal: SyncJournal, source: DirectSource) {
         next.saved = journal.order.map(key => byId.get(key)!).filter(Boolean)
         next.sync = { ...next.sync, committedRevision: journal.revision, status: next.revision === journal.revision ? 'synced' : 'queued', error: undefined }
         next.status = next.revision === journal.revision ? 'saved' : 'dirty'
+        if (journal.operation === 'remove-prefixes') {
+          next.sync = undefined
+          if (!next.document) {
+            next.document = emptyDocument(inFolder(journal.folder, `${session.name.replace(/\.m3u8$/i, '')}-${newId().slice(0, 8)}.m3u8`))
+            next.baseline = null
+            next.status = 'dirty'
+          }
+        }
       }
       return [id, next]
     }))
@@ -256,7 +300,8 @@ export async function recoverSync(libraryId = activeLibrary()?.id) {
       const disk = await readJournal(source), cached = await loadSyncJournal(libraryId), journal = disk?.journal ?? cached
       if (!journal) throw new Error('No recovery record was found. Reselect the original folder; keep its temporary files intact.')
       const done = await executeJournal(source, journal, disk?.bytes ?? null, saveSyncJournal)
-      if (journal.libraryId === libraryId && library.sessions[journal.sessionId]?.sync) await commitJournal(done, source)
+      const rememberedRemoval = journal.operation === 'remove-prefixes' && (library.syncAppliedToken === journal.token || journal.moves.filter(move => move.trackId).every(move => library.tracks[move.trackId!]?.path === move.source))
+      if (journal.libraryId === libraryId && (library.sessions[journal.sessionId]?.sync || rememberedRemoval)) await commitJournal(done, source)
       else {
         // A branch preview, a different browser profile or evicted storage may
         // not retain the old app session. The disk journal still defines an

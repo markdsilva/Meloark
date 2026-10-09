@@ -194,6 +194,8 @@ h1, h2, h3, p { margin-top: 0; }
 .workspace-footnote > span { margin-left: auto; }
 .getting-started { display: flex; align-items: center; gap: 15px; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 15px; margin-top: 15px; font-size: 11px; color: var(--muted); }
 .getting-started > svg { color: var(--accent-text); }
+.getting-started > span { min-width: 0; }
+.getting-started strong { display: block; color: var(--text); margin-bottom: 3px; }
 .getting-started .text-button { margin-left: auto; }
 .album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 25px; padding: 10px 0 25px; }
 .album-card { text-align: left; padding: 12px; background: var(--surface); border-radius: var(--radius); display: flex; flex-direction: column; gap: 10px; min-width: 0; }

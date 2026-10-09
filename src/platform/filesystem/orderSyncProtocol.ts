@@ -10,6 +10,7 @@ export interface SyncJournal {
   version: 1; token: string; libraryId: string; sessionId: string; revision: number; folder: string
   phase: 'staging' | 'finalizing' | 'writing' | 'complete'
   moves: SyncMove[]; patches: SyncPatch[]; order: string[]
+  operation?: 'remove-prefixes'
 }
 export interface SyncDisk {
   readFresh(path: string): Promise<File | null>
@@ -43,6 +44,7 @@ export function journalBytes(journal: SyncJournal) {
 export function parseJournal(bytes: Uint8Array): SyncJournal {
   if (bytes.length > 64 * 1024 * 1024) throw new Error('Recovery journal exceeds the inspection limit.')
   const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as SyncJournal
+  if (value.operation !== undefined && value.operation !== 'remove-prefixes') throw new Error('Unknown filename operation in the recovery journal.')
   const safe = (path: unknown): path is string => typeof path === 'string' && normalizeRelative(path) === path
   const data = (bytes: unknown): bytes is number[] => Array.isArray(bytes) && bytes.length <= 16 * 1024 * 1024 && bytes.every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255)
   if (value.version !== 1 || typeof value.token !== 'string' || !/^[\w-]+$/.test(value.token) || typeof value.libraryId !== 'string' || typeof value.sessionId !== 'string' || !Number.isInteger(value.revision) || !Array.isArray(value.order) || value.order.some(id => typeof id !== 'string') || !['staging', 'finalizing', 'writing', 'complete'].includes(value.phase) || (value.folder !== '' && !safe(value.folder)) || !Array.isArray(value.moves) || !Array.isArray(value.patches)) throw new Error('The recovery journal is invalid. No files were changed.')
