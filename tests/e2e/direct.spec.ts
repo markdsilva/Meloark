@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { wavSample } from '../fixtures/audio'
 
-async function connectFixture(page: Page, options: { playlist?: string; browse?: boolean } = {}) {
+async function connectFixture(page: Page, options: { playlist?: string; browse?: boolean; audioSeconds?: number } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'meloark-test-'))
-  const audio = Buffer.from(wavSample())
+  const audio = Buffer.from(wavSample(options.audioSeconds ?? 1))
   await writeFile(join(directory, 'A.wav'), audio)
   await writeFile(join(directory, 'B.wav'), audio)
   await writeFile(join(directory, 'Local.m3u8'), options.playlist ?? '#EXTM3U\nA.wav\nB.wav\n')
@@ -119,7 +119,9 @@ test('direct save verifies a temporary playlist and leaves audio bytes untouched
   } finally { await fixture.cleanup() }
 })
 test('number removal requires a fresh confirmation when its preview changes, blocks collisions and can be cancelled', async ({ page }) => {
-  const fixture = await connectFixture(page)
+  // Keep playback active until the explicit stop, including with animated controls
+  // and a slower shared runner. A one-second sample can finish between assertions.
+  const fixture = await connectFixture(page, { audioSeconds: 8 })
   try {
     await page.getByRole('button', { name: 'Play playlist', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible()

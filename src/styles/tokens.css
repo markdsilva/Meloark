@@ -48,5 +48,5 @@
   --space-6: 32px;
   --shadow: 0 24px 60px #0006;
   --motion: 150ms ease;
-  --navigation-motion: 180ms ease;
+  --navigation-motion: 240ms cubic-bezier(.22, 1, .36, 1);
 }

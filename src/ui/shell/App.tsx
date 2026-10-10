@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Check, ChevronRight, Disc3, Download, FileMusic, FolderOpen, HardDrive, Headphones, HelpCircle, LibraryBig, ListMusic, LoaderCircle, Plus, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Undo2, Redo2, X } from 'lucide-react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { ArrowRight, Code2, Check, ChevronRight, Disc3, Download, FileMusic, FolderOpen, HardDrive, Headphones, HelpCircle, LibraryBig, ListMusic, LoaderCircle, Plus, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Undo2, Redo2, X } from 'lucide-react'
 import { bootstrap, cancelScan, createNormalizedCopy, exportPlaylist, forgetLibrary, history, loadPlaylist, notify, openDirectory, openPortable, persistNow, reconnect, reconcileSource, savePlaylist, scanLibrary, selectLibrary, selectView, useApp } from '../../app/store'
 import { isDirty, naturalCompare } from '../../domain/models'
 import { detectCapabilities } from '../../platform/capabilities/detect'
@@ -12,6 +12,7 @@ import { CapabilityDialog } from '../onboarding/Capabilities'
 import { BrowserSuggestion } from '../onboarding/BrowserSuggestion'
 import { CreatePlaylist } from '../playlist/CreatePlaylist'
 import { Player } from './Player'
+import { readSidebarWidth, SidebarResize } from './SidebarResize'
 import { Dialog } from '../shared/Dialog'
 import { useMediaQuery } from '../shared/useMediaQuery'
 import { ArrowDownWideNarrow, Play } from 'lucide-react'
@@ -39,6 +40,8 @@ export function App() {
   const [sortAnchor, setSortAnchor] = useState<MenuAnchor>()
   const mobile = useMediaQuery('(max-width: 767px)')
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('trackindex-sidebar') === 'collapsed' } catch { return false } })
+  const shell = useRef<HTMLDivElement>(null)
+  const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth)
   const [picker, setPicker] = useState(false)
   const [removeNumbers, setRemoveNumbers] = useState<{ libraryId: string; folder?: string }>()
   const lyricsOpen = useLyrics(s => s.open)
@@ -108,16 +111,29 @@ export function App() {
         {library && <PlaylistNavigation library={library} open={choosePlaylist} />}
         {!library && <p className="nav-empty">Your playlists will appear here.</p>}
       </div>
-      <div className="rail-actions"><button className="icon-button" aria-label="Libraries and playlists" title="Libraries and playlists" onClick={() => setPicker(true)}><FolderOpen size={20} /></button><button className="icon-button" aria-label="Add library" title="Add library" onClick={() => chooseFolder()}><Plus size={20} /></button><button className="icon-button" aria-label="Create playlist" title="Create playlist" disabled={!library || library.scanning || state.busy} onClick={() => setCreate(true)}><FileMusic size={20} /></button></div><div className="sidebar-bottom"><div className="private-note"><ShieldCheck size={18} /><span>Private by design<small>Your music stays on your device.</small></span></div><button className="nav-item" aria-label="Browser capabilities" title="Browser capabilities" onClick={() => { setSidebar(false); setPicker(false); setHelp(true) }}><HelpCircle size={17} />Browser capabilities</button></div>
+      <div className="sidebar-bottom"><div className="private-note"><ShieldCheck size={18} /><span>Private by design<small>Your music stays on your device.</small></span></div><button className="nav-item" aria-label="Browser capabilities" title="Browser capabilities" onClick={() => { setSidebar(false); setPicker(false); setHelp(true) }}><HelpCircle size={17} />Browser capabilities</button></div>
     </aside>)
-  return <div className={`app ${collapsed && !mobile ? 'collapsed' : ''} ${lyricsOpen ? 'lyrics-open' : ''}`}>
+  return <div ref={shell} style={{ '--sidebar-preferred-width': `${sidebarWidth}px` } as CSSProperties} className={`app ${collapsed && !mobile ? 'collapsed' : ''} ${lyricsOpen ? 'lyrics-open' : ''}`}>
     <input ref={element => { folderInput.current = element; if (element && capabilities.directoryInput) element.setAttribute('webkitdirectory', '') }} type="file" multiple className="sr-only" aria-label="Select library folder" onChange={event => { const files = Array.from(event.target.files ?? []); if (files.length) void openPortable(files, event.target.dataset.reconnect || undefined) }} />
     <input ref={fileInput} type="file" multiple className="sr-only" aria-label="Select library files" onChange={event => { const files = Array.from(event.target.files ?? []); if (files.length) void openPortable(files, event.target.dataset.reconnect || undefined) }} />
-    {!mobile && navigation}
+    {!mobile && <div className="sidebar-shell" id="desktop-navigation">
+      <div className="sidebar-expanded" inert={collapsed} aria-hidden={collapsed}>{navigation}</div>
+      <aside className="sidebar-rail" aria-label="Library navigation" inert={!collapsed} aria-hidden={!collapsed}>
+        <a className="brand" href="#" aria-label="Meloark home" onClick={event => { event.preventDefault(); selectView('library') }}><span className="brand-mark"><ListMusic size={24} /></span></a>
+        <div className="rail-workspace">
+          <button className={`icon-button rail-item ${state.view === 'library' ? 'active' : ''}`} aria-label="All tracks" data-tooltip="All tracks" aria-current={state.view === 'library' ? 'page' : undefined} onClick={() => selectView('library')}><LibraryBig size={18} /></button>
+          <button className={`icon-button rail-item ${state.view === 'albums' ? 'active' : ''}`} aria-label="Albums" data-tooltip="Albums" aria-current={state.view === 'albums' ? 'page' : undefined} onClick={() => selectView('albums')}><Disc3 size={18} /></button>
+          <button className={`icon-button rail-item ${playlistMode ? 'active' : ''}`} aria-label="Active playlist" data-tooltip="Active playlist" disabled={!session} aria-current={playlistMode ? 'page' : undefined} onClick={() => selectView('playlist')}><ListMusic size={18} /></button>
+        </div>
+        <div className="rail-actions"><button className="icon-button" aria-label="Libraries and playlists" data-tooltip="Libraries and playlists" onClick={() => setPicker(true)}><FolderOpen size={20} /></button><button className="icon-button" aria-label="Add library" data-tooltip="Add library" onClick={() => chooseFolder()}><Plus size={20} /></button><button className="icon-button" aria-label="Create playlist" data-tooltip="Create playlist" disabled={!library || library.scanning || state.busy} onClick={() => setCreate(true)}><FileMusic size={20} /></button></div>
+        <div className="sidebar-bottom"><button className="icon-button rail-item" aria-label="Browser capabilities" data-tooltip="Browser capabilities" onClick={() => setHelp(true)}><HelpCircle size={18} /></button></div>
+      </aside>
+      {!collapsed && <SidebarResize root={shell} width={sidebarWidth} change={setSidebarWidth} />}
+    </div>}
     {mobile && sidebar && <Dialog title="Navigation" className="navigation-drawer" close={() => setSidebar(false)}>{navigation}</Dialog>}
     {picker && !mobile && <Dialog title="Libraries and playlists" className="navigation-picker" close={() => setPicker(false)}>{navigation}</Dialog>}
     <main className="main">
-      <header className="topbar"><div className="breadcrumbs"><button className="icon-button ghost-button navigation-toggle" aria-label={mobile ? 'Toggle navigation' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={mobile ? sidebar : !collapsed} onClick={event => { event.currentTarget.focus(); if (mobile) setSidebar(!sidebar); else toggleCollapsed() }}>{collapsed && !mobile ? <ChevronRight size={20} /> : <ChevronRight className="collapse-chevron" size={20} />}</button><span>Workspace</span><ChevronRight size={14} /><strong>{library?.name ?? 'Welcome'}</strong></div><div className="topbar-end"><span className="privacy-pill"><ShieldCheck size={14} />Music stays local</span><a className="icon-button status-help" href="https://github.com/markdsilva/Meloark" target="_blank" rel="noopener noreferrer" aria-label="Meloark on GitHub (opens in a new tab)" data-tooltip="View Meloark on GitHub (opens in a new tab)"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.09 3.29 9.4 7.86 10.93.58.1.79-.25.79-.56v-2.14c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.95.1-.75.4-1.25.73-1.54-2.55-.29-5.23-1.28-5.23-5.69 0-1.26.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.18A11 11 0 0 1 12 6.07c.98 0 1.96.13 2.88.39 2.2-1.49 3.16-1.18 3.16-1.18.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.08 0 4.42-2.68 5.39-5.24 5.68.41.36.78 1.06.78 2.13v3.16c0 .31.21.67.79.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" /></svg></a><button className="icon-button status-help" aria-label="Browser capabilities" data-tooltip="Help, getting started and browser capabilities" onClick={() => setHelp(true)}><HelpCircle size={19} /></button></div></header>
+      <header className="topbar"><div className="breadcrumbs"><button className="icon-button ghost-button navigation-toggle" aria-label={mobile ? 'Toggle navigation' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={mobile ? sidebar : !collapsed} onClick={event => { event.currentTarget.focus(); if (mobile) setSidebar(!sidebar); else toggleCollapsed() }}>{collapsed && !mobile ? <ChevronRight size={20} /> : <ChevronRight className="collapse-chevron" size={20} />}</button><span>Workspace</span><ChevronRight size={14} /><strong>{library?.name ?? 'Welcome'}</strong></div><div className="topbar-end"><span className="privacy-pill"><ShieldCheck size={14} />Music stays local</span><a className="privacy-pill source-pill" href="https://github.com/markdsilva/Meloark" target="_blank" rel="noopener noreferrer" aria-label="Open source (opens in a new tab)"><Code2 size={14} />Open source</a><a className="icon-button status-help" href="https://github.com/markdsilva/Meloark" target="_blank" rel="noopener noreferrer" aria-label="Meloark on GitHub (opens in a new tab)" data-tooltip="View Meloark on GitHub (opens in a new tab)"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.09 3.29 9.4 7.86 10.93.58.1.79-.25.79-.56v-2.14c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.95.1-.75.4-1.25.73-1.54-2.55-.29-5.23-1.28-5.23-5.69 0-1.26.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.18A11 11 0 0 1 12 6.07c.98 0 1.96.13 2.88.39 2.2-1.49 3.16-1.18 3.16-1.18.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.08 0 4.42-2.68 5.39-5.24 5.68.41.36.78 1.06.78 2.13v3.16c0 .31.21.67.79.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" /></svg></a><button className="icon-button status-help" aria-label="Browser capabilities" data-tooltip="Help, getting started and browser capabilities" onClick={() => setHelp(true)}><HelpCircle size={19} /></button></div></header>
       {state.storageError && <div className="storage-banner" role="status">{state.storageError}</div>}
       {state.notice && <div className="notice" role="status"><span>{state.notice}</span><button className="icon-button" aria-label="Dismiss message" onClick={() => notify(undefined)}><X size={16} /></button></div>}
       <div className="guide-mobile-host" />

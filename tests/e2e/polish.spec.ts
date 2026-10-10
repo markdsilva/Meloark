@@ -77,7 +77,7 @@ test('sidebar geometry, restrained lyrics and responsive targets remain accessib
   await sidebar.screenshot({ path: `test-results/sidebar-menu-hover-${info.project.name}.png` })
   const toggle = page.getByRole('contentinfo').getByRole('button', { name: 'Lyrics', exact: true })
   const toggleBox = (await toggle.boundingBox())!
-  expect(1440 - toggleBox.x - toggleBox.width).toBe(36)
+  expect(1440 - toggleBox.x - toggleBox.width).toBe(48)
   await toggle.click(); await toggle.hover()
   await expect(toggle).toHaveAttribute('aria-pressed', 'true')
   await toggle.focus(); await page.keyboard.press('Tab')
@@ -106,7 +106,7 @@ test('sidebar geometry, restrained lyrics and responsive targets remain accessib
   await expect(page.getByRole('dialog', { name: 'Libraries and playlists', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 390, height: 844 })
-  await expect(toggle).toBeVisible(); expect((await toggle.boundingBox())!.width).toBe(44)
+  await expect(toggle).toBeVisible(); await expect.poll(async () => (await toggle.boundingBox())?.width).toBe(44)
   await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click()
   for (const button of await page.getByRole('dialog', { name: 'Navigation', exact: true }).locator('.forget, .row-more').all()) expect((await button.boundingBox())!.width).toBe(44)
 })
