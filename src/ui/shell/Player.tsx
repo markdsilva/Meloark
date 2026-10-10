@@ -11,6 +11,7 @@ import { useMediaQuery } from '../shared/useMediaQuery'
 import { Dialog } from '../shared/Dialog'
 import { detectCapabilities } from '../../platform/capabilities/detect'
 import { toggleLyrics, useLyrics } from '../../lyrics/store'
+import { AmbientBackground } from './AmbientBackground'
 
 function Volume() {
   const volume = usePlayer(s => s.volume), muted = usePlayer(s => s.muted)
@@ -47,6 +48,7 @@ export function Player() {
   const lyricsOpen = useLyrics(s => s.open)
   const lyricsButton = <button className={`icon-button ghost-button toggle-button lyrics-toggle ${lyricsOpen ? 'active' : ''}`} aria-label="Lyrics" aria-pressed={lyricsOpen} aria-expanded={lyricsOpen} aria-controls="lyrics-panel" data-tooltip="Show synchronized lyrics" onClick={() => { setExpanded(false); setMore(false); toggleLyrics() }}><MessageSquareText size={18} strokeWidth={1.75} /></button>
   return <footer className={`player ${mobile ? 'player-mobile' : ''}`} aria-label="Music player">
+    <AmbientBackground />
     <div className="player-identity"><Identity />{!mobile && track && <button className="player-audio" aria-label="Audio details" onClick={() => setDetails(true)}><span>{audioSummary(track)}</span><LiveReadout track={track} /></button>}</div>
     <div className="transport"><div className="transport-buttons">
       {mobile ? <><Transport previous={false} />{lyricsButton}<button className="icon-button" aria-label="Expand player" aria-expanded={expanded} onClick={() => setExpanded(true)}><ChevronUp size={20} /></button></> : <><Transport />{!narrow && <><Toggles /><Volume /></>}{narrow && <>{lyricsButton}<button className="icon-button" aria-label="More player controls" aria-expanded={more} onClick={() => setMore(true)}><MoreHorizontal size={21} /></button></>}</>}
@@ -54,6 +56,7 @@ export function Player() {
     {mobile && <Seek compact />}
     {!mobile && !narrow && <div className="player-secondary">{lyricsButton}</div>}
     {expanded && mobile && <Dialog title="Now playing" className="now-playing-sheet" close={() => setExpanded(false)}>
+      <AmbientBackground />
       <Artwork blob={track?.metadata.artwork} title={track?.metadata.title ?? 'No track'} large /><Identity /><Seek /><div className="sheet-controls"><Transport /><Toggles />{lyricsButton}</div><Volume />
       {track && <details className="sheet-audio" open={audioExpanded} onToggle={event => setAudioExpanded(event.currentTarget.open)}><summary>Audio details</summary>{audioExpanded && <AudioFacts track={track} />}</details>}
     </Dialog>}

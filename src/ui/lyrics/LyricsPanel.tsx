@@ -11,6 +11,7 @@ import { Menu, menuAnchor, type MenuAnchor } from '../shared/Menu'
 import { useMediaQuery } from '../shared/useMediaQuery'
 import { Seek, Toggles, Transport } from '../shell/Player'
 import type { LyricsRecord } from '../../lyrics/types'
+import { AmbientBackground } from '../shell/AmbientBackground'
 
 function useActiveCue(record?: LyricsRecord) {
   const playing = usePlayer(state => state.playing), position = usePlayer(state => state.position), current = usePlayer(state => state.current)
@@ -168,6 +169,6 @@ export function LyricsPanel() {
     return () => { window.removeEventListener('keydown', key); if (opener?.isConnected) opener.focus() }
   }, [open, docked])
   if (!open) return null
-  if (!docked) return <Dialog title="Lyrics" className="lyrics-drawer" close={closeLyrics}><div id="lyrics-panel" className="lyrics-panel-content"><LyricsContent overlay /></div></Dialog>
+  if (!docked) return <Dialog title="Lyrics" className="lyrics-drawer" close={closeLyrics}><AmbientBackground /><div id="lyrics-panel" className="lyrics-panel-content"><LyricsContent overlay /></div></Dialog>
   return <aside className="lyrics-panel" id="lyrics-panel" aria-label="Lyrics"><div className="lyrics-panel-heading"><span><MessageSquareText size={17} />LYRICS</span><button className="icon-button ghost-button" aria-label="Close lyrics" onClick={closeLyrics}><X size={18} /></button></div><LyricsContent overlay={false} /></aside>
 }

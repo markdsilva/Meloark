@@ -1,0 +1,28 @@
+.ambient-background { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.ambient-workspace { position: relative; inset: auto; z-index: 0; grid-column: 2 / -1; grid-row: 1; min-width: 0; min-height: 0; }
+.main { grid-column: 2; grid-row: 1; }
+.ambient-layer { position: absolute; inset: 0; background: radial-gradient(ellipse at 5% 16%, var(--ambient-primary), transparent 76%), radial-gradient(ellipse at 100% 58%, var(--ambient-secondary), transparent 80%), var(--bg); }
+.ambient-arriving { animation: ambient-arrive 1800ms ease-in-out both; }
+.player { position: relative; isolation: isolate; }
+.now-playing-sheet { isolation: isolate; }
+.player > .ambient-background { opacity: .55; }
+.topbar { background: color-mix(in srgb, var(--bg) 88%, transparent); }
+.ambient-toggle.active { color: var(--accent-text); background: var(--accent-soft); }
+.ambient-toggle:hover:not(:disabled) { color: var(--accent-text); background: var(--control-on-hover); }
+.main, .track-scroll { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.main:hover, .main:focus-within, .track-scroll:hover, .track-scroll:focus-within { scrollbar-color: var(--subtle) transparent; }
+.lyrics-scroll { scrollbar-width: none; }
+.lyrics-scroll::-webkit-scrollbar { display: none; }
+.lyrics-panel::before, .lyrics-drawer::before { background: linear-gradient(145deg, #ffffff03, transparent 60%), color-mix(in srgb, var(--sidebar) 38%, transparent); }
+.lyrics-panel::before { z-index: -1; }
+.lyrics-drawer > .ambient-background { z-index: -2; }
+.lyric-line.current, .lyric-line.current:hover { color: var(--accent-text); text-shadow: 0 2px 12px #0002; }
+.lyric-line::before { content: none; }
+@keyframes ambient-arrive { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 767px) { .ambient-workspace { grid-column: 1 / -1; } .main { grid-column: 1; } }
+@media (prefers-reduced-motion: reduce) { .ambient-arriving { animation: none; } }
+@media (forced-colors: active) {
+  .ambient-background { display: none; }
+  .lyrics-scroll { scrollbar-width: auto; mask-image: none; }
+  .lyrics-scroll::-webkit-scrollbar { display: block; }
+}

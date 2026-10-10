@@ -120,7 +120,7 @@ export function GlobalSearch() {
   function back() { ++previewToken.current; setPreviewing(false); setScope(undefined); setMissing(0); changeQuery(''); input.current?.focus() }
   function keys(event: KeyboardEvent<HTMLInputElement>) {
     if (event.nativeEvent.isComposing) return
-    if (event.key === 'Escape') { event.preventDefault(); close() }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close() }
     else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && items.length) {
       event.preventDefault()
       const next = (activeIndex + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length

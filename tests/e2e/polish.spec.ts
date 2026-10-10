@@ -84,11 +84,9 @@ test('sidebar geometry, restrained lyrics and responsive targets remain accessib
   const panel = page.locator('#lyrics-panel')
   await expect(panel.locator('.lyric-line.current')).toHaveText('A softly highlighted test line')
   await panel.getByRole('button', { name: 'Lyrics options', exact: true }).hover()
-  // Hover auto-wait does not wait for the separate lyric marker transition.
-  // Sample its final style, including on a slower shared CI runner.
-  await expect.poll(() => panel.locator('.lyric-line.current').evaluate(element => getComputedStyle(element, '::before').opacity)).toBe('1')
-  const style = await panel.locator('.lyric-line.current').evaluate(element => ({ color: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor, shadow: getComputedStyle(element).boxShadow, edge: getComputedStyle(element, '::before').opacity }))
-  expect(style.background).toBe('rgba(0, 0, 0, 0)'); expect(style.shadow).toBe('none'); expect(style.edge).toBe('1')
+  await expect(panel.locator('.lyric-line.current')).toHaveCSS('color', 'rgb(227, 175, 108)')
+  const style = await panel.locator('.lyric-line.current').evaluate(element => ({ color: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor, shadow: getComputedStyle(element).boxShadow, marker: getComputedStyle(element, '::before').content }))
+  expect(style.background).toBe('rgba(0, 0, 0, 0)'); expect(style.shadow).toBe('none'); expect(style.marker).toBe('none')
   expect(style.color).not.toBe(await panel.locator('.lyric-line').nth(1).evaluate(element => getComputedStyle(element).color))
   await page.screenshot({ path: `test-results/polish-desktop-${info.project.name}.png`, fullPage: true })
   await page.emulateMedia({ reducedMotion: 'reduce' })
