@@ -8,6 +8,7 @@ export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
   workers: 3,
+  reporter: process.env.GITHUB_ACTIONS ? [['list'], ['github']] : 'list',
   use: { baseURL: url, trace: 'retain-on-failure' },
   webServer: { command: `npm run ${process.env.MELOARK_TEST_BUILD === '1' ? 'preview' : 'dev'} -- --port ${port} --strictPort`, url, reuseExistingServer: false },
   projects: [

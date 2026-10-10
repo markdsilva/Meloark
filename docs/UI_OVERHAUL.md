@@ -52,4 +52,5 @@ The feature-branch workflow now covers `feat/ui-overhaul` as well as the origina
 feature branch. Its native Linux checks use disposable folders and a real
 Chrome folder picker to verify numbered and unnumbered audio, playlist references,
 LRC sidecars, byte preservation, interrupted-sync recovery, and number removal.
+GitHub runs emit test failure annotations as well as logs and retained traces.
 Windows native-picker acceptance remains a separate manual check.
