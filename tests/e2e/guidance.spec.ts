@@ -59,14 +59,16 @@ test('All tracks leads a new user from browsing to a populated, draggable playli
   await page.getByRole('button', { name: 'Arrange playlist', exact: true }).click()
   await expect(page.locator('.track-title strong')).toHaveText(['B', 'C', 'A'])
 })
-test('a filtered browse queue remains stable when search changes', async ({ page }, info) => {
+test('a browse queue remains stable when global search changes', async ({ page }, info) => {
   test.skip(info.project.name === 'webkit' && process.platform === 'win32', 'Windows WebKit has no native audio decoder.')
   await load(page)
-  await page.getByRole('textbox', { name: 'Search tracks', exact: true }).fill('B')
+  await page.setViewportSize({ width: 1440, height: 900 })
   await page.getByRole('button', { name: 'Play B', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Search all music', exact: true }).fill('C')
   await page.getByRole('button', { name: 'Clear search', exact: true }).click()
+  await page.keyboard.press('Escape')
   await page.getByRole('button', { name: 'Next track', exact: true }).click()
-  await expect(page.locator('.now-playing strong')).toHaveText('Ready when you are')
+  await expect(page.locator('.now-playing strong')).toHaveText('C')
 })
 test('context menus preserve groups, support keyboard navigation, and restore focus', async ({ page }) => {
   await load(page, true)

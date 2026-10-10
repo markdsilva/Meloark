@@ -51,7 +51,7 @@ class PlayerController {
     return audio
   }
   configure(context: QueueContext | undefined, entries: QueueItem[], tracks: Record<string, Track>, source?: LibrarySource, snapshotPlayback = false) {
-    const scope = context ? `${context.libraryId}/${context.kind === 'playlist' ? context.sessionId : '@browse'}` : ''
+    const scope = context ? `${context.libraryId}/${context.kind === 'playlist' ? context.sessionId : context.kind === 'search' ? '@search' : '@browse'}` : ''
     if (scope !== this.scope) { this.stop(); this.queue.entries = []; this.queue.history = []; this.queue.future = []; this.scope = scope }
     usePlayer.setState({ context })
     this.tracks = tracks; this.source = source

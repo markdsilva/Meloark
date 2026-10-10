@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { addTracks, createPlaylist, playLibraryTrack, playPlaylistEntry, removeEntries, scanLibrary, selectLibrary, sources, useApp, type Library } from '../../src/app/store'
+import { addTracks, createPlaylist, playLibraryTrack, playPlaylistEntry, playSearchTrack, removeEntries, scanLibrary, selectLibrary, sources, updateLibrary, useApp, type Library } from '../../src/app/store'
 import { player, usePlayer } from '../../src/playback/player'
 import type { LibrarySource } from '../../src/platform/filesystem/types'
 import type { Track } from '../../src/domain/models'
@@ -13,6 +13,35 @@ beforeEach(() => {
 })
 afterEach(() => { vi.restoreAllMocks(); vi.clearAllTimers(); vi.useRealTimers(); sources.clear() })
 describe('independent library playback', () => {
+  it('plays search results from another library without changing the active draft or view', () => {
+    createPlaylist('Draft'); addTracks(['a', 'b'])
+    const current = useApp.getState(), draft = current.libraries[0].sessions['Draft.m3u8']
+    const other = { ...fixtureLibrary(), id: 'other', name: 'Other music' }
+    useApp.setState({ libraries: [...current.libraries, other] }); sources.set('other', sources.get('test')!)
+    expect(playSearchTrack('other', 'c', ['a', 'b', 'c'])).toBe(true)
+    expect(useApp.getState()).toMatchObject({ activeLibrary: 'test', view: current.view, visibleTrackIds: current.visibleTrackIds })
+    expect(useApp.getState().libraries[0].sessions['Draft.m3u8']).toBe(draft)
+    expect(usePlayer.getState().context).toEqual({ kind: 'search', libraryId: 'other' })
+    updateLibrary('test', library => ({ ...library, scanError: 'Unrelated change' }))
+    expect(player.queue.current).toBe('c')
+    expect(player.play).toHaveBeenCalledTimes(1)
+    updateLibrary('other', library => ({ ...library, tracks: { ...library.tracks, c: { ...library.tracks.c, path: 'renamed.wav' } } }))
+    expect(player.queue.current).toBe('c')
+    expect(usePlayer.getState().track?.path).toBe('renamed.wav')
+  })
+  it('keeps search queue ordering after the selected song and reconciles missing tracks', () => {
+    playSearchTrack('test', 'b', ['a', 'b', 'c', 'c'])
+    expect(player.queue.entries.map(entry => entry.id)).toEqual(['a', 'b', 'c'])
+    updateLibrary('test', library => ({ ...library, tracks: { a: library.tracks.a, c: library.tracks.c } }))
+    expect(player.queue.current).toBe('c')
+    expect(player.queue.entries.map(entry => entry.id)).toEqual(['a', 'c'])
+  })
+  it.each(['disconnected', 'unsupported', 'recovery'])('refuses %s search playback without replacing the existing queue', condition => {
+    playLibraryTrack('a')
+    updateLibrary('test', library => ({ ...library, connected: condition !== 'disconnected', syncRecovery: condition === 'recovery' ? 'Recover first' : undefined, tracks: condition === 'unsupported' ? { ...library.tracks, b: { ...library.tracks.b, support: 'unsupported' } } : library.tracks }))
+    expect(playSearchTrack('test', 'b')).toBe(false)
+    expect(player.queue.current).toBe('a')
+  })
   it('plays without a playlist and captures visible ordering without membership changes', () => {
     playLibraryTrack('a')
     expect(player.queue.entries.map(item => item.id)).toEqual(['b', 'a', 'c'])

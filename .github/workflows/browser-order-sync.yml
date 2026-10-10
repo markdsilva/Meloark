@@ -35,7 +35,7 @@ jobs:
         run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1200x24' sh -c 'openbox >/tmp/meloark-window-manager.log 2>&1 & npm run test:e2e -- tests/e2e/native-order-sync.spec.ts --project=chromium --workers=1 --output=test-results/native'
       - name: Built static assets for the Cloudflare preview
         if: ${{ !cancelled() }}
-        run: MELOARK_TEST_BUILD=1 npm run test:e2e -- tests/e2e/production-smoke.spec.ts --project=chromium --output=test-results/production
+        run: MELOARK_TEST_BUILD=1 npm run test:e2e -- tests/e2e/production-smoke.spec.ts tests/e2e/global-search.spec.ts --project=chromium --output=test-results/production
       - name: Native sync from the production bundle
         if: ${{ !cancelled() }}
         run: MELOARK_TEST_BUILD=1 xvfb-run --auto-servernum --server-args='-screen 0 1920x1200x24' sh -c 'openbox >/tmp/meloark-production-window-manager.log 2>&1 & npm run test:e2e -- tests/e2e/native-order-sync.spec.ts --project=chromium --workers=1 --output=test-results/production-native'

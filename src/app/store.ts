@@ -62,6 +62,12 @@ function syncPlayer() {
   const library = activeLibrary(), session = activeSession()
   const snapshotPlayback = !!library && Object.values(library.sessions).some(item => item.sync)
   const context = usePlayer.getState().context
+  if (context?.kind === 'search') {
+    const searched = useApp.getState().libraries.find(item => item.id === context.libraryId)
+    const entries = searched?.scanning ? player.queue.entries : player.queue.entries.filter(entry => entry.trackId && searched?.tracks[entry.trackId])
+    player.configure(searched ? context : undefined, entries, searched?.tracks ?? {}, searched?.connected ? sources.get(searched.id) : undefined, !!searched && Object.values(searched.sessions).some(item => item.sync))
+    return
+  }
   if (context?.kind === 'library' && context.libraryId === library?.id) {
     // Browsing filters are a snapshot, while fresh metadata and missing files reconcile.
     const entries = library.scanning ? player.queue.entries : player.queue.entries.filter(entry => entry.trackId && library.tracks[entry.trackId])
@@ -85,6 +91,17 @@ export function playPlaylistEntry(id: string) {
   if (!library?.connected || !session || !source || !session.entries.some(entry => entry.id === id)) return
   player.configure({ kind: 'playlist', libraryId: library.id, sessionId: session.id }, session.entries, library.tracks, source, Object.values(library.sessions).some(item => item.sync))
   player.queue.start(id); void player.play(id)
+}
+export function playSearchTrack(libraryId: string, trackId: string, orderedIds: string[] = [trackId]) {
+  const library = useApp.getState().libraries.find(item => item.id === libraryId), source = sources.get(libraryId), track = library?.tracks[trackId]
+  if (!library?.connected || !source || !track) { notify('Reconnect this library to play its music.'); return false }
+  if (syncBusy(libraryId) || library.syncRecovery) { notify('Wait for filename sync or recover it before starting playback.'); return false }
+  if (track.support === 'unsupported' || track.support === 'failed') { notify('This track cannot be played in this browser.'); return false }
+  const ids = [...new Set(orderedIds.includes(trackId) ? orderedIds : [trackId, ...orderedIds])].filter(id => library.tracks[id])
+  // Scope search playback separately; the active library, playlist and draft stay in place.
+  player.configure({ kind: 'search', libraryId }, ids.map(id => ({ id, trackId: id })), library.tracks, source, Object.values(library.sessions).some(item => item.sync))
+  player.queue.start(trackId); void player.play(trackId)
+  return true
 }
 export function togglePlayback() {
   if (usePlayer.getState().current) { void player.toggle(); return }

@@ -1,5 +1,5 @@
 export interface QueueItem { id: string; trackId?: string }
-export type QueueContext = { kind: 'library'; libraryId: string } | { kind: 'playlist'; libraryId: string; sessionId: string }
+export type QueueContext = { kind: 'library' | 'search'; libraryId: string } | { kind: 'playlist'; libraryId: string; sessionId: string }
 export type Repeat = 'off' | 'all' | 'one'
 export class PlaybackQueue {
   entries: QueueItem[] = []

@@ -63,7 +63,8 @@ test('native audio plays, seeks, and follows the active draft', async ({ page },
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible()
 })
 
-test('10,000 tracks use a bounded DOM and retain selection across search', async ({ page }) => {
+test('10,000 tracks use a bounded DOM and retain the active view and selection across global search', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/')
   await expect(page.getByText('Restoring workspace…')).toBeHidden()
   await page.evaluate(async () => {
@@ -78,13 +79,18 @@ test('10,000 tracks use a bounded DOM and retain selection across search', async
   await expect(page.getByRole('heading', { name: 'Large library', exact: true })).toBeVisible()
   await expect(page.getByRole('grid')).toHaveAttribute('aria-rowcount', '10001')
   expect(await page.getByRole('grid').getByRole('row').count()).toBeLessThan(35)
-  await page.getByRole('textbox', { name: 'Search tracks' }).fill('Track 10000')
-  await expect(page.locator('.track-title strong')).toHaveText(['Track 10000'])
-  await page.getByRole('checkbox', { name: 'Select Track 10000', exact: true }).check()
+  await page.getByRole('checkbox', { name: 'Select Track 00001', exact: true }).check()
+  await page.getByRole('combobox', { name: 'Search all music' }).fill('Track 10000')
+  await expect(page.getByRole('listbox', { name: 'Music search results' }).getByRole('option')).toContainText('Track 10000')
+  await expect(page.getByRole('grid')).toHaveAttribute('aria-rowcount', '10001')
+  await expect(page.getByRole('checkbox', { name: 'Select Track 00001', exact: true })).toBeChecked()
+  await page.getByRole('combobox', { name: 'Search all music' }).fill('Track')
+  await expect(page.getByRole('listbox', { name: 'Music search results' }).getByRole('option')).toHaveCount(12)
+  await expect(page.locator('.global-search-footer')).toContainText('10,000')
   await page.getByRole('button', { name: 'Clear search' }).click()
+  await page.keyboard.press('Escape')
   await expect(page.getByText('1 selected', { exact: true })).toBeVisible()
-  await page.locator('.track-scroll').evaluate(element => { element.scrollTop = element.scrollHeight })
-  await expect(page.getByRole('checkbox', { name: 'Select Track 10000', exact: true })).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'Select Track 00001', exact: true })).toBeChecked()
 })
 
 test('portable playlist preserves duplicates, supports history, exports, and recovers a draft', async ({ page }) => {
