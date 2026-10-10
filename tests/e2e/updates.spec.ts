@@ -43,7 +43,7 @@ test('transport and filter toggles retain distinct state on hover and keyboard f
   const shuffle = page.getByRole('button', { name: 'Shuffle', exact: true })
   await shuffle.hover(); const off = await surface(page, 'Shuffle')
   await shuffle.click(); await expect(shuffle).toHaveAttribute('aria-pressed', 'true')
-  const on = await surface(page, 'Shuffle'); expect(on).not.toEqual(off)
+  await expect.poll(() => surface(page, 'Shuffle')).not.toEqual(off)
   await shuffle.focus(); await page.keyboard.press('Space'); await expect(shuffle).toHaveAttribute('aria-pressed', 'false')
   await page.getByRole('button', { name: 'Repeat: off', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Repeat: all', exact: true })).toHaveAttribute('aria-pressed', 'true')
@@ -55,9 +55,12 @@ test('transport and filter toggles retain distinct state on hover and keyboard f
   await expect(page.getByRole('button', { name: 'Unmute', exact: true })).toHaveAttribute('aria-pressed', 'true')
   const filters = page.getByRole('button', { name: 'Track filters', exact: true })
   await filters.hover(); const before = await surface(page, 'Track filters'); await filters.click()
-  await expect(filters).toHaveAttribute('aria-expanded', 'true'); expect(await surface(page, 'Track filters')).not.toEqual(before)
+  await expect(filters).toHaveAttribute('aria-expanded', 'true')
+  await expect.poll(() => surface(page, 'Track filters')).not.toEqual(before)
   const exportButton = page.getByRole('button', { name: 'Export', exact: true }); await exportButton.hover()
-  await page.mouse.down(); expect(await exportButton.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none'); await page.mouse.up()
+  await page.mouse.down()
+  await expect.poll(() => exportButton.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none')
+  await page.mouse.up()
 })
 
 test('desktop collapse persists and rail keeps library selection reachable', async ({ page }) => {
