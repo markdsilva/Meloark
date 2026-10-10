@@ -21,11 +21,11 @@ export function SyncControls({ removeNumbers }: { removeNumbers: (folder: string
     <button className="button secondary" onClick={() => setSettings(true)}>Sync settings</button>
     {settings && <Dialog title="Filename sync settings" close={() => setSettings(false)}>
       <p><strong>{sync.mode === 'both' ? 'Numbered filenames + M3U8' : 'Numbered filenames only'}</strong><br />Folder: {sync.folder || 'Library root'}{sync.mode === 'both' && <><br />Synchronized playlist: {session.document?.path}</>}</p>
-      <p>Other playlists keep their own sequence; their file references follow renames.</p>
-      <p>Every audio file in this folder appears once. Adding or removing playlist entries is available after disabling filename sync. Audio files are never deleted.</p>
+      <p>Other playlists keep their order. Their file references follow renames.</p>
+      <p>Disable sync to add or remove tracks from this playlist. Audio files are never deleted.</p>
       {sync.error && <p className="callout" role="alert">{sync.error}</p>}
-      <p className="muted">Disabling keeps current filenames. Filename-only mode then becomes an unsaved M3U8 draft; it creates no file until you Save or Export.</p>
-      <p>Prefer unnumbered filenames? Review and remove the numbers while keeping your playlist order.</p>
+      <p className="muted">Disabling keeps current filenames. Filename-only playlists become M3U8 drafts; Save or Export to keep the order.</p>
+      <p>Remove filename numbers without changing playlist order.</p>
       <button className="button secondary" disabled={busy || !!library.syncRecovery} onClick={() => { setSettings(false); removeNumbers(sync.folder) }}>Remove filename numbers…</button>
       <div className="dialog-actions"><button className="button secondary" disabled={busy || !!library.syncRecovery} onClick={pauseOrderSync}>{sync.enabled ? 'Pause sync' : 'Resume sync'}</button><button className="button secondary" disabled={busy || !!library.syncRecovery} onClick={() => { if (disableOrderSync()) setSettings(false) }}>Disable filename sync</button></div>
     </Dialog>}

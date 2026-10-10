@@ -20,8 +20,8 @@ const sensors = [PointerSensor.configure({
   activationConstraints: event => event.pointerType === 'touch' ? [new PointerActivationConstraints.Delay({ value: 250, tolerance: 5 })] : [new PointerActivationConstraints.Distance({ value: 8 })],
   preventActivation: (event, source) => event.button !== 0 || (event.target instanceof Element && !!event.target.closest('button, input, label, select, textarea, a, [role="button"], [contenteditable="true"]')) || (event.pointerType === 'touch' && source.element?.getAttribute('data-touch-reorder') !== 'true'),
 })]
-function TrackRow({ row, index, selected, selectable, reorderable, selecting, touchReorder, suppressClick, onSelect, onResolve, onDetails, onPlay, onMenu }: {
-  row: RowData; index: number; selected: boolean; selectable: boolean; reorderable: boolean
+function TrackRow({ row, index, selected, reorderable, selecting, touchReorder, suppressClick, onSelect, onResolve, onDetails, onPlay, onMenu }: {
+  row: RowData; index: number; selected: boolean; reorderable: boolean
   onSelect: (event: MouseEvent | KeyboardEvent, index: number) => void; onResolve: (entry: PlaylistEntry) => void
   selecting: boolean; onDetails: (track: Track) => void
   touchReorder: boolean; suppressClick: () => boolean
@@ -47,18 +47,17 @@ function TrackRow({ row, index, selected, selectable, reorderable, selecting, to
     if (!canPlay) return
     if (isCurrent) void player.toggle(); else onPlay(row)
   }
-  return <div ref={element => { drag.ref(reorderable ? element : null); drop.ref(reorderable ? element : null) }} role="row" aria-rowindex={index + 2} aria-selected={selected} tabIndex={0}
+  return <div ref={element => { drag.ref(reorderable ? element : null); drop.ref(reorderable ? element : null) }} role="row" aria-label={`Track ${index + 1}: ${title}`} aria-rowindex={index + 2} aria-selected={selected} tabIndex={0}
     data-touch-reorder={touchReorder} aria-description={reorderable ? 'Drag this row to reorder. Alt+Arrow up or down also moves selected tracks.' : undefined}
     className={`track-row ${reorderable ? 'reorderable' : ''} ${touchReorder ? 'touch-reorder' : ''} ${selecting ? 'selecting' : ''} ${selected ? 'selected' : ''} ${isCurrent ? 'current' : ''} ${drag.isDragSource ? 'dragging' : ''} ${drop.isDropTarget ? 'drop-target' : ''}`}
     onContextMenu={event => { event.preventDefault(); onMenu(row, menuAnchor(event.currentTarget, event.clientX, event.clientY)) }}
-    onClick={event => { if (!suppressClick()) onSelect(event, index) }} onDoubleClick={() => { if (!suppressClick()) activate() }} onKeyDown={event => {
+    onClick={event => { if (!suppressClick()) onSelect(event, index) }} onDoubleClick={event => { if (!(event.target instanceof Element && event.target.closest('button, a, input')) && !suppressClick()) activate() }} onKeyDown={event => {
       if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); event.stopPropagation(); onMenu(row, menuAnchor(event.currentTarget)); return }
       if (event.target !== event.currentTarget) return
       if (event.key === 'Enter') { event.preventDefault(); activate() }
       if (event.key === ' ') { event.preventDefault(); onSelect(event, index) }
     }}>
     <div role="gridcell" className="row-leading">
-      <label className="selection-checkbox" onClick={event => event.stopPropagation()}><input type="checkbox" aria-label={`Select ${title}`} checked={selected} disabled={!selectable || busy} onClick={event => { event.stopPropagation(); onSelect(event, index) }} onChange={() => {}} /></label>
       <span className={`row-number ${isCurrent ? 'active' : ''}`}>{isCurrent && playing ? <span className="equalizer"><i /><i /><i /></span> : index + 1}</span>
       <button className="row-play icon-button" disabled={!canPlay} aria-label={`Play ${title}`} data-tooltip={canPlay ? `Play ${title}${row.entry ? '' : ' without adding to a playlist'}` : 'Reconnect the library or choose a supported track'} onClick={event => { event.stopPropagation(); activate() }}>{isCurrent && playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}</button>
     </div>
@@ -102,7 +101,7 @@ export function TrackList({ query, folder, artist, sortBy, playlist }: { query: 
   const orderedIds = JSON.stringify(rows.flatMap(row => row.trackId ? [row.trackId] : []))
   useEffect(() => { if (!playlist) useApp.setState({ visibleTrackIds: JSON.parse(orderedIds) as string[] }) }, [orderedIds, playlist])
   const reorderable = playlist && !query && !folder && !artist && sortBy === 'order'
-  const virtual = useVirtualizer({ count: rows.length, getScrollElement: () => parent.current, estimateSize: () => mobile ? 72 : 64, overscan: 8, getItemKey: index => rows[index].id })
+  const virtual = useVirtualizer({ count: rows.length, getScrollElement: () => parent.current, estimateSize: () => mobile ? 72 : 64, overscan: 8, getItemKey: index => rows[index].id, scrollMargin: 42, scrollPaddingStart: 42 })
   useEffect(() => {
     const offset = parent.current?.scrollTop ?? 0
     virtual.measure()
@@ -142,7 +141,7 @@ export function TrackList({ query, folder, artist, sortBy, playlist }: { query: 
     const row = rows[index]
     if (event.shiftKey) {
       setSelected(new Set(rows.slice(Math.min(index, anchor.current), Math.max(index, anchor.current) + 1).map(r => r.id)))
-    } else if (event.ctrlKey || event.metaKey || (mobile && selecting) || (event.target instanceof HTMLInputElement && event.target.type === 'checkbox')) {
+    } else if (event.ctrlKey || event.metaKey || (mobile && selecting) || ('key' in event && event.key === ' ')) {
       const next = new Set(validSelected); if (next.has(row.id)) next.delete(row.id); else next.add(row.id)
       setSelected(next); anchor.current = index
     } else { setSelected(new Set([row.id])); anchor.current = index }
@@ -163,11 +162,11 @@ export function TrackList({ query, folder, artist, sortBy, playlist }: { query: 
       </> : <button className="text-button" disabled={!editable || !!session?.sync} data-tooltip={!editable ? 'Create or open an editable playlist first' : undefined} onClick={() => addTracks([...validSelected])}><Plus size={15} />Add to playlist</button>}<button className="text-button" onClick={() => setSelected(new Set())}>Clear</button></div>}
       {playlist && !reorderable && <span className="muted">Clear filters and choose playlist order to reorder</span>}
     </div>
-    <div role="grid" aria-label={playlist ? 'Playlist track list' : 'Library track list'} aria-rowcount={rows.length + 1} aria-colcount={6} onKeyDown={event => {
+    <div role="grid" aria-label={playlist ? 'Playlist track list' : 'Library track list'} aria-rowcount={rows.length + 1} aria-colcount={6} aria-multiselectable="true" onKeyDown={event => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') { event.preventDefault(); setSelected(new Set(rows.map(row => row.id))) }
+      if (!busy && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') { event.preventDefault(); setSelected(new Set(rows.map(row => row.id))) }
       if (event.key === 'Escape') setSelected(new Set())
-      if (event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key) && reorderable) { event.preventDefault(); move(event.key === 'ArrowUp' ? -1 : 1) }
+      if (!busy && event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key) && reorderable) { event.preventDefault(); move(event.key === 'ArrowUp' ? -1 : 1) }
       if (event.key === 'Delete' && playlist && !busy) removeEntries(validSelected)
       if (!event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key) && rows.length && event.target instanceof HTMLElement && event.target.getAttribute('role') === 'row') {
         event.preventDefault()
@@ -177,7 +176,6 @@ export function TrackList({ query, folder, artist, sortBy, playlist }: { query: 
         requestAnimationFrame(() => parent.current?.querySelector<HTMLElement>(`[aria-rowindex="${next + 2}"]`)?.focus())
       }
     }}>
-      <div className="track-header" role="row"><span role="columnheader">#</span><span role="columnheader">Title</span><span role="columnheader">Album / folder</span><span role="columnheader">Audio</span><span role="columnheader" aria-label="Duration"><Clock3 size={15} /></span><span role="columnheader" aria-label="Actions" /></div>
       <DragDropProvider sensors={sensors} onDragStart={event => { const id = String(event.operation.source?.id); dragSelection.current = validSelected.has(id) ? new Set(validSelected) : new Set([id]); setSelected(dragSelection.current); setDragCount(dragSelection.current.size) }} onDragEnd={event => {
         setDragCount(0)
         clickAfter.current = performance.now() + 350
@@ -188,9 +186,9 @@ export function TrackList({ query, folder, artist, sortBy, playlist }: { query: 
         if (from < 0 || to < 0 || from === to) return
         reorderEntries(dragSelection.current, to > from ? to + 1 : to)
       }}>
-        <div className="track-scroll" ref={parent}><div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
-          {visible.map(item => <div key={item.key} style={{ position: 'absolute', top: item.start, width: '100%', height: item.size }}><TrackRow row={rows[item.index]} index={item.index} selected={validSelected.has(rows[item.index].id)} selectable={!busy} reorderable={reorderable} selecting={selecting} touchReorder={mobile && touchReorder} suppressClick={() => performance.now() < clickAfter.current} onSelect={select} onResolve={setResolve} onDetails={setDetails} onPlay={play} onMenu={openMenu} /></div>)}
-        </div>{!rows.length && <div className="list-empty"><Music2 size={30} /><strong>{query ? 'No matching tracks' : playlist ? 'Make room for your favorites' : 'No audio files found'}</strong><span>{playlist ? 'Browse your library and add tracks to this playlist.' : 'Choose a folder with browser-native audio files.'}</span></div>}</div>
+        <div className="track-scroll" ref={parent}><div className="track-header" role="row"><span role="columnheader">#</span><span role="columnheader">Title</span><span role="columnheader">Album / folder</span><span role="columnheader">Audio</span><span role="columnheader" aria-label="Duration"><Clock3 size={15} /></span><span role="columnheader" aria-label="Actions" /></div><div style={{ height: virtual.getTotalSize(), position: 'relative' }}>
+          {visible.map(item => <div key={item.key} style={{ position: 'absolute', top: item.start - 42, width: '100%', height: item.size }}><TrackRow row={rows[item.index]} index={item.index} selected={validSelected.has(rows[item.index].id)} reorderable={reorderable} selecting={selecting} touchReorder={mobile && touchReorder} suppressClick={() => performance.now() < clickAfter.current} onSelect={select} onResolve={setResolve} onDetails={setDetails} onPlay={play} onMenu={openMenu} /></div>)}
+        </div>{!rows.length && <div className="list-empty"><Music2 size={30} /><strong>{query ? 'No matching tracks' : playlist ? 'Playlist is empty' : 'No audio files found'}</strong><span>{playlist ? 'Browse your library and add tracks to this playlist.' : 'Choose a folder containing supported audio files.'}</span></div>}</div>
         <DragOverlay>{dragCount > 0 && <div className="drag-overlay"><GripVertical size={18} />Moving {dragCount} {dragCount === 1 ? 'track' : 'tracks'}</div>}</DragOverlay>
       </DragDropProvider>
     </div>

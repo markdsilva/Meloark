@@ -20,9 +20,9 @@ function finish(status: 'skipped' | 'completed') {
 const steps = [
   { title: 'Choose your music', text: 'Choose a folder or select files. Your music stays on this device. The picker opens only when you click.', target: 'folder' },
   { title: 'Try playing a track', text: 'Use a track’s Play button. Listening does not require a playlist and does not add tracks to one.', target: 'tracks' },
-  { title: 'Create a playlist draft', text: 'Choose New playlist. Start empty or review the numbered filenames. Creating a draft does not change any file.', target: 'create' },
-  { title: 'Add your favorites', text: 'Open All tracks and use + or the track menu to add music. Add & Play adds it and starts playback.', target: 'tabs' },
-  { title: 'Make the order yours', text: 'In Playlist order, drag anywhere on a track row, or select tracks and press Alt+Arrow up/down. Touch devices have a Reorder tracks mode. Undo restores the previous order.', target: 'tracks' },
+  { title: 'Create a playlist draft', text: 'Choose New playlist. M3U8-only drafts leave files unchanged. Numbered filename modes require your confirmation.', target: 'create' },
+  { title: 'Add tracks', text: 'Open All tracks and use + or the track menu to add music. Add & Play adds it and starts playback.', target: 'tabs' },
+  { title: 'Reorder tracks', text: 'In Playlist order, drag anywhere on a track row, or select tracks and press Alt+Arrow up/down. Touch devices have a Reorder tracks mode. Undo restores the previous order.', target: 'tracks' },
   { title: 'Save or sync', text: 'M3U8-only edits stay in your draft until Save or Export. Opt-in filename sync updates the complete folder automatically after playback stops. Sync settings can pause, retry or disable it.', target: 'save' },
 ]
 export function Guide() {
@@ -67,5 +67,5 @@ export function Guide() {
 export function GuideInvitation() {
   const { active, seen } = useGuide(), ready = useApp(s => s.ready)
   if (active || seen || !ready) return null
-  return <div className="guide-invitation" role="region" aria-label="Getting started"><Compass size={20} /><div><strong>New to Meloark?</strong><p>A short guide shows you how to listen and make a playlist.</p></div><button className="button secondary" onClick={startGuide}>Start tour</button><button className="text-button" onClick={() => finish('skipped')}>Skip</button></div>
+  return <div className="guide-invitation" role="region" aria-label="Getting started"><Compass size={20} /><div><strong>New to Meloark?</strong><p>Learn to play music and create a playlist.</p></div><button className="button secondary" onClick={startGuide}>Start tour</button><button className="text-button" onClick={() => finish('skipped')}>Skip</button></div>
 }

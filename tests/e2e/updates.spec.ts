@@ -1,3 +1,4 @@
+import { trackRow } from './helpers/ui'
 import { test, expect, type Page } from '@playwright/test'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -75,9 +76,9 @@ test('mobile navigation, group editing, and expanded player share transport stat
   await expect(page.getByRole('dialog', { name: 'Navigation', exact: true })).toBeVisible()
   await page.keyboard.press('Escape'); await expect(open).toBeFocused()
   await page.getByRole('button', { name: 'Select tracks', exact: true }).click()
-  await page.getByRole('checkbox', { name: 'Select First', exact: true }).check()
-  await page.getByRole('checkbox', { name: 'Select Second', exact: true }).check()
-  await page.getByRole('row').filter({ has: page.getByRole('checkbox', { name: 'Select First', exact: true }) }).press('Alt+ArrowDown')
+  await trackRow(page, 'First').click({ modifiers: ['ControlOrMeta'] })
+  await trackRow(page, 'Second').click({ modifiers: ['ControlOrMeta'] })
+  await trackRow(page, 'First').press('Alt+ArrowDown')
   await expect(page.locator('.track-title strong')).toHaveText(['Third', 'First', 'Second'])
   await page.getByRole('button', { name: 'Undo', exact: true }).click()
   await expect(page.locator('.track-title strong')).toHaveText(['First', 'Second', 'Third'])
@@ -100,7 +101,7 @@ test('workspace and capability cards fit narrow, landscape, and zoom-equivalent 
     const mobile = width < 768
     if (mobile) await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click()
     await (mobile ? page.getByRole('dialog', { name: 'Navigation', exact: true }) : page.getByRole('main')).getByRole('button', { name: 'Browser capabilities', exact: true }).click()
-    await expect(page.getByText('Save playlists', { exact: true })).toBeVisible()
+    await expect(page.getByText('Save playlists to a folder', { exact: true })).toBeVisible()
     expect(await page.getByRole('dialog').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
     await page.getByRole('dialog').locator('summary').click()
     await expect(page.getByText('Playlist export', { exact: true })).toBeVisible()
@@ -142,7 +143,7 @@ test('empty and reviewed multi-folder creation reject duplicate names and recove
     await expect(page.getByRole('radio', { name: /Numbered filenames only/ })).toBeDisabled()
     await page.getByRole('button', { name: 'Browse first', exact: true }).click()
     await page.getByRole('button', { name: 'New playlist', exact: true }).click(); await page.getByLabel('Playlist name', { exact: true }).fill('Empty')
-    await page.getByRole('button', { name: 'Create draft', exact: true }).click(); await expect(page.getByText('Make room for your favorites')).toBeVisible()
+    await page.getByRole('button', { name: 'Create draft', exact: true }).click(); await expect(page.getByText('Playlist is empty')).toBeVisible()
     await page.getByRole('button', { name: 'New playlist', exact: true }).click(); await page.getByLabel('Playlist name', { exact: true }).fill('Empty'); await page.getByRole('button', { name: 'Create draft', exact: true }).click()
     await expect(page.getByRole('dialog')).toBeVisible(); await page.getByLabel('Playlist name', { exact: true }).fill('Reviewed')
     await page.getByRole('radio', { name: /Review filename order/ }).check(); await expect(page.getByText(/2 folders are grouped/)).toBeVisible()

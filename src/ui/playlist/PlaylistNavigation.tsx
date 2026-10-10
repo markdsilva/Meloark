@@ -61,7 +61,7 @@ export function PlaylistNavigation({ library, open, create }: { library: Library
         <button className={`nav-item ${active ? 'active' : ''}`} aria-label={session?.name ?? path.split('/').at(-1)} data-tooltip={session?.sync?.mode === 'filenames' ? `${session.sync.folder || 'Library root'} · numbered filenames only` : session?.sourcePath && session.sourcePath !== path ? `${path} · imported from ${session.sourcePath}` : path} aria-current={active ? 'page' : undefined} onClick={() => { void open(path) }} disabled={busy || !library.connected && !session}><FileMusic size={16} /><span className="library-name">{session?.name ?? path.split('/').at(-1)}</span>{session && isDirty(session) && <span className="draft-dot" title={session.sync ? 'Sync pending' : 'Unsaved draft'} />}</button>
       </ContextActions>
     })}
-    {!paths.length && <p className="nav-empty">Your playlists will appear here.</p>}
+    {!paths.length && <p className="nav-empty">No playlists yet.</p>}
     {manage && <Dialog title="Manage playlists" close={() => setManage(false)}><p className="dialog-intro">Removing a playlist from the app leaves its file in your library. Restore hidden playlists here.</p>
       {!(library.hiddenPlaylists?.length) && <p className="muted">No hidden playlists.</p>}
       {library.hiddenPlaylists?.map(path => <div className="manage-playlist-row" key={path}><span>{path}{!library.playlists.includes(path) && <small>Not found in the current inventory</small>}</span><button className="button secondary" disabled={busy} onClick={() => restorePlaylist(path)}>Restore</button></div>)}

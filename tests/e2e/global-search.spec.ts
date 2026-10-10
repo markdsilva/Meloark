@@ -1,3 +1,4 @@
+import { trackRow } from './helpers/ui'
 import { test, expect, type Page } from '@playwright/test'
 import { taggedWav, wavSample } from '../fixtures/audio'
 
@@ -16,11 +17,11 @@ async function load(page: Page) {
   await expect(page.getByRole('heading', { name: 'Listening', exact: true })).toBeVisible()
 }
 async function snapshot(page: Page) {
-  return { heading: await page.locator('h1').textContent(), rows: await page.locator('.track-title strong').allTextContents(), selected: await page.getByRole('checkbox', { checked: true }).count() }
+  return { heading: await page.locator('h1').textContent(), rows: await page.locator('.track-title strong').allTextContents(), selected: await page.locator('.track-row[aria-selected="true"]').count() }
 }
 test('top-bar search has stable geometry and rich results without filtering the active playlist', async ({ page }, info) => {
   await load(page)
-  await page.getByRole('checkbox', { name: 'Select Evening', exact: true }).check()
+  await trackRow(page, 'Evening').click({ modifiers: ['ControlOrMeta'] })
   const before = await snapshot(page), field = page.locator('.global-search-field'), box = (await field.boundingBox())!
   await search(page).fill('cafe')
   await expect(results(page).getByRole('option')).toHaveCount(1)
@@ -43,7 +44,7 @@ test('a song from another library plays while the original playlist and selectio
     { name: 'Other mix.m3u8', mimeType: 'audio/x-mpegurl', buffer: Buffer.from('#EXTM3U\nOther recording.wav\n') },
   ])
   await expect(page.getByRole('heading', { name: 'Other mix', exact: true })).toBeVisible()
-  await page.getByRole('checkbox', { name: 'Select Other recording', exact: true }).check()
+  await trackRow(page, 'Other recording').click({ modifiers: ['ControlOrMeta'] })
   const before = await snapshot(page)
   await search(page).fill('Café Lights')
   await results(page).getByRole('option').click()
@@ -69,7 +70,7 @@ test('explores an unopened playlist inside search without creating a session or 
   await expect(page.locator('.global-search-footer')).toContainText('1 unavailable playlist entry')
   expect(await snapshot(page)).toEqual(before)
   await page.getByRole('button', { name: 'Search all libraries', exact: true }).click()
-  await expect(page.locator('.global-search-heading')).toContainText('Your music, everywhere')
+  await expect(page.locator('.global-search-heading')).toContainText('Search your music')
   await expect(results(page).getByRole('option')).toHaveCount(3)
 })
 test('artist and album exploration uses real metadata and keeps song ordering untouched', async ({ page }) => {

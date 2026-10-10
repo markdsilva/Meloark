@@ -8,6 +8,7 @@ import { dirname, filename, naturalCompare } from '../../domain/models'
 import { filenameStem, planNames } from '../../domain/orderSync'
 import { adoptPlaylistOrder, filenameEntries, folderOrderError, inspectPlaylistOrder, reviewedEntries, sameTrackOrder, type PlaylistOrderChoice, type PlaylistOrderReview } from '../../app/playlistOrder'
 import { Dialog } from '../shared/Dialog'
+import { Select } from '../shared/Select'
 
 export function CreatePlaylist({ close, setup = false }: { close: () => void; setup?: boolean }) {
   const library = useApp(s => s.libraries.find(l => l.id === s.activeLibrary))!
@@ -77,6 +78,7 @@ export function CreatePlaylist({ close, setup = false }: { close: () => void; se
   let preview: ReturnType<typeof planNames> = [], previewError: string | undefined
   try { if (storage !== 'm3u8' && previewEntries.length) preview = planNames(previewEntries, library.tracks, folder, Object.fromEntries(ordered.map(track => [track.id, filenameStem(track.path)])), library.files, 'preview') }
   catch (reason) { previewError = message(reason) }
+  const targets = new Map(preview.map(move => [move.trackId, move.target]))
   const blocked = working || inspecting || chooseSource || !!selectionError || !!authority && !selectedChoice
   function selectAuthority(path: string) { setAuthority(path); setSourceChosen(true); setChoice(''); setConfirmed(false); setError(undefined) }
   function selectFolder(path: string) { setFolder(path); selectAuthority('') }
@@ -103,34 +105,39 @@ export function CreatePlaylist({ close, setup = false }: { close: () => void; se
     } catch (reason) { setError(message(reason)); nameInput.current?.focus() }
     finally { setWorking(false) }
   }
-  return <Dialog title={setup ? `Set up ${library.name}` : 'Create a playlist'} className={`playlist-create ${setup ? 'folder-setup' : ''}`} close={() => { if (!working) close() }} wide={setup || mode === 'indexes' || storage !== 'm3u8'}>
-    {setup && <p className="setup-detected"><strong>{Object.keys(library.tracks).length} tracks</strong><span>{Object.values(library.tracks).filter(track => track.index !== null).length} numbered filenames</span><span>{library.playlists.length} playlist files</span></p>}
-    <p className="dialog-intro">{setup ? 'Set up a playlist to arrange and play this folder. Choose how to remember your order; after setup, drag songs in the Playlist tab.' : 'Keep your order in a playlist, in the filenames, or in both. After creating it, drag songs in the Playlist tab to arrange them.'}</p>
-    <fieldset className="sync-options"><legend>Store playlist order</legend>{([
-      ['m3u8', 'M3U8 only', 'Keep track order in a playlist. Audio filenames stay unchanged.'],
-      ['filenames', 'Numbered filenames only', 'Automatically number one complete audio folder. No M3U8 is created.'],
-      ['both', 'Numbered filenames + M3U8', 'Keep filenames and a dedicated M3U8 in the same order.'],
+  return <Dialog title={setup ? `Set up ${library.name}` : 'Create a playlist'} className={`playlist-create ${setup ? 'folder-setup' : ''}`} close={() => { if (!working) close() }} wide>
+    {setup && <p className="setup-detected"><strong>{Object.keys(library.tracks).length} tracks</strong></p>}
+    <p className="dialog-intro">Choose how to save this playlist’s order.</p>
+    <div className="setup-heading"><h3 id="storage-heading">Choose playlist order</h3>{(library.kind !== 'direct' || !navigator.locks) && <small>Filename sync needs direct folder access and browser locks.</small>}</div>
+    <fieldset className="sync-options" aria-labelledby="storage-heading">{([
+      ['m3u8', 'M3U8 only', 'Save a playlist. Keep filenames unchanged.'],
+      ['filenames', 'Numbered filenames only', 'Number every track in one folder. No M3U8.'],
+      ['both', 'Numbered filenames + M3U8', 'Keep numbered files and an M3U8 in the same order.'],
     ] as const).map(([value, label, description]) => <label key={value}><input type="radio" name="storage-mode" checked={storage === value} disabled={created || working || inspecting || value !== 'm3u8' && (library.kind !== 'direct' || !navigator.locks)} onChange={() => { setStorage(value); setChoice(''); setConfirmed(false); setError(undefined) }} /><span><strong>{label}</strong><small>{description}</small></span></label>)}</fieldset>
-    {library.kind !== 'direct' && <p className="muted">Filename sync requires a direct-access folder in a desktop Chromium browser.</p>}
-    {(setup || storage !== 'm3u8') && <label className="field">Audio folder<select aria-label="Audio folder" value={folder} disabled={working || created || inspecting} onChange={event => selectFolder(event.target.value)}>{folders.map(path => <option key={path} value={path}>{path || 'Library root'}</option>)}</select></label>}
+    <label className="field">{storage !== 'filenames' && authority ? 'Playlist file' : 'Playlist name'}<input ref={nameInput} value={storage !== 'filenames' && authority ? filename(authority) : name} readOnly={created || working || storage !== 'filenames' && !!authority} aria-invalid={!!error} aria-describedby={error ? 'playlist-name-error' : undefined} onChange={event => { setName(event.target.value); setError(undefined) }} autoFocus placeholder="My playlist" /></label>
+    {error && <div id="playlist-name-error" className="field-error" role="alert"><p>{error}</p>{error.includes('already exists') && <button className="text-button" onClick={() => { let index = 2; let next = `${name.replace(/\.m3u8$/i, '')} ${index}`; while (playlistNameError(next, library)?.includes('already exists')) next = `${name.replace(/\.m3u8$/i, '')} ${++index}`; setName(next); setError(undefined); nameInput.current?.focus() }}>Use an available name</button>}</div>}
+    <div className="setup-fields">
+      {(setup || storage !== 'm3u8') && <Select label="Audio folder" value={folder} disabled={working || created || inspecting} onChange={selectFolder} options={folders.map(path => ({ value: path, label: path || 'Library root' }))} />}
+      {!!library.playlists.filter(path => /\.m3u8$/i.test(path)).length && <Select label="Playlist source" accessibleLabel={storage === 'both' ? 'Initial sync order' : 'Playlist source'} value={chooseSource ? '@choose' : authority ?? ''} disabled={working || created || inspecting} onChange={selectAuthority} options={[
+        ...(chooseSource ? [{ value: '@choose', label: 'Choose a playlist or create one', disabled: true }] : []),
+        { value: '', label: storage === 'both' ? 'Filename order · new M3U8' : storage === 'filenames' ? 'Filename order · no M3U8' : 'Create a new M3U8' },
+        ...inspection.items.map(item => {
+          const incompatible = item.error ?? (findPlaylistSession(library, item.path)?.sync ? 'Already uses filename sync' : storage !== 'm3u8' && item.review ? folderOrderError(item.review.document.entries, library, folder) : undefined)
+          return { value: item.path, label: item.path, disabled: !!incompatible, reason: incompatible }
+        }),
+      ]} />}
+      {storage === 'm3u8' && !authority && setup && <Select label="Starting order" accessibleLabel="Initial playlist order" value={mode} disabled={working || created} onChange={value => setMode(value as typeof mode)} options={[{ value: 'folder', label: `Filename order · ${ordered.length} tracks` }, { value: 'indexes', label: `Numbered order · all ${paths.length} tracks` }, { value: 'empty', label: 'Start empty' }]} />}
+    </div>
     {!!library.playlists.filter(path => /\.m3u8$/i.test(path)).length && <>
-      <p className="callout">{inspecting ? 'Inspecting existing playlists…' : 'Existing playlists found. Use one to keep its order and avoid creating another file. Playlist names do not need to match the folder.'}</p>
-      {chooseSource && <p className="muted">Several playlists contain this folder. Choose which one to use, or explicitly create a new playlist.</p>}
-      <label className="field">{storage === 'both' ? 'Initial order' : 'Playlist file'}<select aria-label={storage === 'both' ? 'Initial sync order' : 'Playlist file'} value={chooseSource ? '@choose' : authority ?? ''} disabled={working || created || inspecting} onChange={event => selectAuthority(event.target.value)}>
-        {chooseSource && <option value="@choose" disabled>Choose an existing playlist or create a new one</option>}
-        <option value="">{storage === 'both' ? 'Filename order · new M3U8' : storage === 'filenames' ? 'Filename order · no new M3U8' : 'Create a new M3U8'}</option>
-        {inspection.items.map(item => {
-          const incompatible = item.error ?? (findPlaylistSession(library, item.path)?.sync ? 'already uses sync' : storage !== 'm3u8' && item.review ? folderOrderError(item.review.document.entries, library, folder) : undefined)
-          return <option key={item.path} value={item.path} disabled={!!incompatible}>Existing playlist order · {item.path}{incompatible ? ' · unavailable for this folder' : ''}</option>
-        })}
-      </select></label>
+      {inspecting && <p className="muted" role="status">Reading existing playlists…</p>}
+      {chooseSource && <p className="callout">Several playlists contain this folder. Choose one or create a new playlist.</p>}
       {selectionError && <p className="field-error" role="alert">{selectionError}</p>}
-      {inspection.items.some(item => item.error) && <p className="muted">Some playlists could not be read: {inspection.items.filter(item => item.error).map(item => `${item.path}: ${item.error}`).join('; ')}</p>}
-      {storage !== 'm3u8' && inspection.items.some(item => item.review && folderOrderError(item.review.document.entries, library, folder)) && <p className="muted">Filename sync needs every audio file in the selected folder exactly once. Playlists with missing tracks, duplicates, other folders or only some of these tracks can be opened in M3U8-only mode.</p>}
-      <button className="text-button" disabled={working || inspecting || created} onClick={() => { setRefresh(value => value + 1); setChoice(''); setConfirmed(false); setError(undefined) }}>Inspect playlists again</button>
+      {inspection.items.some(item => item.error) && <p className="callout">Could not read: {inspection.items.filter(item => item.error).map(item => `${item.path}: ${item.error}`).join('; ')}</p>}
+      {storage !== 'm3u8' && inspection.items.some(item => item.review && folderOrderError(item.review.document.entries, library, folder)) && <p className="muted">Filename sync requires every track in one folder exactly once. Other playlists can use M3U8-only mode.</p>}
+      <button className="text-button" disabled={working || inspecting || created} onClick={() => { setRefresh(value => value + 1); setChoice(''); setConfirmed(false); setError(undefined) }}>Read playlists again</button>
     </>}
     {review && <>
-      <p className="callout">{ordersDiffer ? 'The saved M3U8 order differs from filename order.' : 'The saved M3U8 and filenames have the same track order.'} {storage === 'm3u8' ? 'Opening it keeps audio filenames unchanged. Choose numbered filenames + M3U8 to keep both in step.' : storage === 'both' ? `Your chosen order will be saved in ${review.path} and the numbered filenames.` : 'Your chosen order will be stored in the numbered filenames.'}</p>
+      <p className="callout">{ordersDiffer ? 'Saved playlist and filename order differ.' : 'Saved playlist and filename order match.'} {storage === 'm3u8' ? 'Filenames stay unchanged in M3U8-only mode.' : storage === 'both' ? `This order will update ${review.path} and numbered filenames.` : 'This order will number the audio files.'}</p>
       {(needsChoice || storage !== 'm3u8') && <fieldset className="mode-options" disabled={working || created || inspecting}><legend>Choose the starting order</legend>
         <label className={selectedChoice === 'saved' ? 'chosen' : ''}><input type="radio" name="order-authority" checked={selectedChoice === 'saved'} onChange={() => { setChoice('saved'); setConfirmed(false) }} /><span><strong>Use saved M3U8 order</strong><small>Read from {review.path}</small></span></label>
         {storage !== 'm3u8' && <label className={selectedChoice === 'filenames' ? 'chosen' : ''}><input type="radio" name="order-authority" checked={selectedChoice === 'filenames'} onChange={() => { setChoice('filenames'); setConfirmed(false) }} /><span><strong>Use filename order</strong><small>{storage === 'both' ? 'Replace this M3U8’s sequence with the folder order' : 'Keep the folder’s current filename order'}</small></span></label>}
@@ -138,32 +145,29 @@ export function CreatePlaylist({ close, setup = false }: { close: () => void; se
       </fieldset>}
       {needsChoice && !selectedChoice && <p className="muted">Choose an order to see the preview and continue.</p>}
     </>}
-    <label className="field">{storage !== 'filenames' && authority ? 'Order-authority playlist' : 'Playlist name'}<input ref={nameInput} value={storage !== 'filenames' && authority ? filename(authority) : name} readOnly={created || working || storage !== 'filenames' && !!authority} aria-invalid={!!error} aria-describedby={error ? 'playlist-name-error' : undefined} onChange={event => { setName(event.target.value); setError(undefined) }} autoFocus placeholder="My playlist" /></label>
-    {error && <div id="playlist-name-error" className="field-error" role="alert"><p>{error}</p>{error.includes('already exists') && <button className="text-button" onClick={() => { let index = 2; let next = `${name.replace(/\.m3u8$/i, '')} ${index}`; while (playlistNameError(next, library)?.includes('already exists')) next = `${name.replace(/\.m3u8$/i, '')} ${++index}`; setName(next); setError(undefined); nameInput.current?.focus() }}>Use an available name</button>}</div>}
     {storage === 'm3u8' && !authority && !setup && <div className="mode-options">
       <label className={mode === 'empty' ? 'chosen' : ''}><input type="radio" name="initial-order" checked={mode === 'empty'} onChange={() => setMode('empty')} /><FileMusic /><span><strong>Start empty</strong><small>Add tracks from your library</small></span></label>
-      <label className={mode === 'indexes' ? 'chosen' : ''}><input type="radio" name="initial-order" checked={mode === 'indexes'} disabled={!paths.length} onChange={() => setMode('indexes')} /><ListOrdered /><span><strong>Review filename order</strong><small>Use folder-local numbered filenames as a starting point</small></span></label>
+      <label className={mode === 'indexes' ? 'chosen' : ''}><input type="radio" name="initial-order" checked={mode === 'indexes'} disabled={!paths.length} onChange={() => setMode('indexes')} /><ListOrdered /><span><strong>Review filename order</strong><small>Start with numbered filenames</small></span></label>
     </div>}
-    {storage === 'm3u8' && !authority && setup && <label className="field">Initial order<select aria-label="Initial playlist order" value={mode} disabled={working || created} onChange={event => setMode(event.target.value as typeof mode)}><option value="folder">Filename order · {ordered.length} tracks in this folder</option><option value="indexes">Review numbered order · all {paths.length} tracks</option><option value="empty">Start empty · add tracks later</option></select></label>}
-    {storage === 'm3u8' && !authority && mode === 'folder' && <><p className="callout">Start with {ordered.length} tracks. Audio filenames stay unchanged. {library.kind === 'direct' ? 'Set up saves an M3U8 in this library.' : 'Export your playlist to keep its order.'}</p></>}
+    {storage === 'm3u8' && !authority && mode === 'folder' && <><p className="callout">Audio filenames stay unchanged. {library.kind === 'direct' ? 'Set up saves an M3U8 in this library.' : 'Export your playlist to keep its order.'}</p></>}
     {storage === 'm3u8' && !authority && mode === 'indexes' && <>
       <div className="review-issues">
         {groups.length > 1 && <p className="callout">{groups.length} folders are grouped by folder name below. Their indexes are independent. Review the combined order before creating.</p>}
         {groups.map(group => group.issues.length ? <div key={group.folder}><strong>{group.folder || 'Library root'}</strong>{group.issues.map(issue => <p key={issue}>{issue}</p>)}</div> : null)}
       </div>
-      <div className="review-list" ref={parent}><div style={{ height: list.getTotalSize(), position: 'relative' }}>{list.getVirtualItems().map(item => <div key={paths[item.index]} className="review-row" style={{ position: 'absolute', top: item.start, width: '100%' }}>
+      <div className="review-list" style={{ height: Math.min(250, list.getTotalSize()) }} ref={parent}><div style={{ height: list.getTotalSize(), position: 'relative' }}>{list.getVirtualItems().map(item => <div key={paths[item.index]} className="review-row" style={{ position: 'absolute', top: item.start, width: '100%' }}>
         <span className="row-number">{item.index + 1}</span><span title={paths[item.index]}>{paths[item.index]}</span>
       </div>)}</div></div>
       <label className="review-confirm"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} />I reviewed the displayed order, including ties and unindexed tracks.</label>
       <p className="muted">Adjust the order by dragging tracks after creating the draft.</p>
     </>}
-    {storage === 'm3u8' && authority && !!previewEntries.length && <div className="review-list" ref={parent} aria-label="Playlist order preview"><div style={{ height: list.getTotalSize(), position: 'relative' }}>{list.getVirtualItems().map(item => <div key={previewEntries[item.index].id} className="review-row" style={{ position: 'absolute', top: item.start, width: '100%', height: item.size }}><span className="row-number">{item.index + 1}</span><span>{previewEntries[item.index].path ?? previewEntries[item.index].raw}</span></div>)}</div></div>}
+    {storage === 'm3u8' && authority && !!previewEntries.length && <div className="review-list" style={{ height: Math.min(250, list.getTotalSize()) }} ref={parent} aria-label="Playlist order preview"><div style={{ height: list.getTotalSize(), position: 'relative' }}>{list.getVirtualItems().map(item => <div key={previewEntries[item.index].id} className="review-row" style={{ position: 'absolute', top: item.start, width: '100%', height: item.size }}><span className="row-number">{item.index + 1}</span><span>{previewEntries[item.index].path ?? previewEntries[item.index].raw}</span></div>)}</div></div>}
     {storage !== 'm3u8' && <>
-      {!!previewEntries.length && <p className="callout">Preview only — arrange these {previewEntries.length} tracks by dragging in the Playlist tab after {setup ? 'setup' : 'creating the playlist'}. {storage === 'both' ? 'Numbered filenames and an M3U8 update together.' : 'Only numbered filenames store the order.'} Matching LRC files and references in accessible playlists follow the renamed tracks. Other playlists keep their own sequence; their file references follow renames. Keep other apps from editing this folder during sync.</p>}
+      {!!previewEntries.length && <><p className="preview-note">Preview only · Reorder tracks in the Playlist tab after setup.</p><p className="callout">{storage === 'both' ? 'Numbered filenames and the selected M3U8 will stay in the same order.' : 'Numbered filenames will store the track order.'} Keep other apps from editing this folder during sync.</p><details className="setup-details"><summary>What else changes?</summary><p>Matching LRC files and references in accessible playlists follow renamed tracks. Other playlists keep their own sequence.</p></details></>}
       {previewError && <p className="field-error" role="alert">{previewError}</p>}
-      <div className="sync-preview" ref={parent} aria-label="Filename changes preview"><div style={{ height: list.getTotalSize(), position: 'relative' }}>{list.getVirtualItems().map(item => { const entry = previewEntries[item.index]; return <div key={entry.id} style={{ position: 'absolute', top: item.start, width: '100%', height: item.size }}><span>{item.index + 1}</span><span>{entry.path}<small>→ {preview.find(move => move.trackId === entry.trackId)?.target ?? entry.path}</small></span></div> })}</div></div>
+      <div className="sync-preview" ref={parent} aria-label="Filename changes preview"><div style={{ height: list.getTotalSize(), position: 'relative' }}>{list.getVirtualItems().map(item => { const entry = previewEntries[item.index]; return <div key={entry.id} style={{ position: 'absolute', top: item.start, width: '100%', height: item.size }}><span>{item.index + 1}</span><span>{entry.path}<small>→ {targets.get(entry.trackId) ?? entry.path}</small></span></div> })}</div></div>
       <label className="review-confirm"><input type="checkbox" checked={confirmed} disabled={blocked || !!previewError || !previewEntries.length} onChange={event => setConfirmed(event.target.checked)} />I reviewed this folder and order and want automatic file renaming.</label>
-      <p className="muted">Enable asks for write access and tests native rename on a disposable file before touching music.</p>
+      <p className="muted">Requires write permission. Rename support is checked before changing music files.</p>
     </>}
     <div className="dialog-actions"><button className="button secondary" disabled={working} onClick={close}>{created ? 'Open draft' : setup ? 'Browse first' : 'Cancel'}</button><button className="button primary" disabled={blocked || (storage === 'filenames' || !authority) && !name.trim() || (storage === 'm3u8' ? !authority && mode === 'indexes' && !reviewed : !confirmed || !!previewError || !previewEntries.length)} onClick={() => { void create() }}>{working ? 'Checking folder…' : created ? 'Retry save' : storage === 'm3u8' && authority ? 'Use existing playlist' : setup ? 'Set up playlist' : storage === 'm3u8' ? 'Create draft' : 'Enable filename sync'}</button></div>
   </Dialog>

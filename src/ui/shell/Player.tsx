@@ -38,7 +38,7 @@ export function Seek({ compact = false }: { compact?: boolean }) {
 }
 function Identity() {
   const track = usePlayer(s => s.track), error = usePlayer(s => s.error), context = usePlayer(s => s.context)
-  return <div className="now-playing"><Artwork blob={track?.metadata.artwork} title={track?.metadata.title ?? 'No track'} /><div><strong>{track?.metadata.title ?? 'Ready when you are'}</strong><span>{error ?? (track ? `${track.metadata.artist || track.filename} · ${context?.kind === 'library' ? 'Library queue' : context?.kind === 'search' ? 'Search queue' : 'Playlist queue'}` : 'Choose music and press Play')}</span></div></div>
+  return <div className="now-playing"><Artwork blob={track?.metadata.artwork} title={track?.metadata.title ?? 'No track'} /><div><strong>{track?.metadata.title ?? 'Select a track'}</strong><span>{error ?? (track ? `${track.metadata.artist || track.filename} · ${context?.kind === 'library' ? 'Library queue' : context?.kind === 'search' ? 'Search queue' : 'Playlist queue'}` : 'Choose music, then press Play')}</span></div></div>
 }
 export function Player() {
   const mobile = useMediaQuery('(max-width: 767px)'), narrow = useMediaQuery('(max-width: 1050px)')

@@ -15,7 +15,7 @@ export function isChromiumBrowser(browser: Pick<Navigator, 'userAgent'> & { user
 }
 
 export function BrowserRecommendation() {
-  return <><strong>A little more freedom with Chrome or Edge</strong><p>Desktop Chrome and Edge use Chromium, which supports direct folder access and saving playlists back to your music folder. You can still listen, edit and export here.</p></>
+  return <><strong>Save directly with desktop Chrome or Edge</strong><p>Desktop Chrome and Edge support direct folder access. You can still listen, edit and export here.</p></>
 }
 
 export function BrowserSuggestion({ capabilities, paused = false, details }: { capabilities: Capabilities; paused?: boolean; details: () => void }) {

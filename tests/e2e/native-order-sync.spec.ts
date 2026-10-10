@@ -98,11 +98,11 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
     }
     await page.getByRole('radio', { name: /Numbered filenames \+ M3U8/ }).check()
     if (!numbered) {
-      await expect(page.getByLabel('Initial sync order', { exact: true })).toHaveValue(authorityFile)
+      await expect(page.getByLabel('Initial sync order', { exact: true })).toHaveAttribute('data-value', authorityFile)
       await expect(page.getByRole('button', { name: 'Set up playlist', exact: true })).toBeDisabled()
       await page.getByRole('radio', { name: /Use saved M3U8 order/ }).check()
     }
-    await expect(page.getByRole('dialog')).toContainText(`Preview only — arrange these 3 tracks by dragging in the Playlist tab after ${numbered ? 'creating the playlist' : 'setup'}.`)
+    await expect(page.getByRole('dialog')).toContainText('Preview only · Reorder tracks in the Playlist tab after setup.')
     if (numbered) await page.getByLabel('Playlist name', { exact: true }).fill('Ordered')
     await page.getByRole('checkbox', { name: /I reviewed this folder/ }).check()
     await page.screenshot({ path: `test-results/native-sync-${codec}-preview.png`, fullPage: true })

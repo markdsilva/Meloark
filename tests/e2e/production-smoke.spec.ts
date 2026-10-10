@@ -1,3 +1,4 @@
+import { trackRow } from './helpers/ui'
 import { test, expect } from '@playwright/test'
 import { wavSample } from '../fixtures/audio'
 
@@ -16,7 +17,7 @@ test('the production bundle loads local samples, plays, reorders, exports and op
   await page.getByRole('button', { name: 'Pause', exact: true }).click()
   await page.getByRole('slider', { name: 'Seek', exact: true }).fill('3')
   await expect(page.locator('.seek')).toContainText('0:03')
-  await page.getByRole('checkbox', { name: 'Select First', exact: true }).check()
+  await trackRow(page, 'First').click({ modifiers: ['ControlOrMeta'] })
   await page.getByRole('row').filter({ has: page.getByRole('button', { name: 'Play First', exact: true }) }).press('Alt+ArrowDown')
   await expect(page.locator('.track-title strong')).toHaveText(['Second', 'First', 'Third'])
   await page.getByRole('button', { name: 'Undo', exact: true }).click()

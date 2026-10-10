@@ -1,3 +1,4 @@
+import { trackRow } from './helpers/ui'
 import { test, expect } from '@playwright/test'
 import { wavSample } from '../fixtures/audio'
 test('touch selection and row dragging move a group in explicit reorder mode', async ({ browser }, info) => {
@@ -10,8 +11,8 @@ test('touch selection and row dragging move a group in explicit reorder mode', a
       { name: 'Touch.m3u8', mimeType: 'audio/x-mpegurl', buffer: Buffer.from('#EXTM3U\nA.wav\nB.wav\nC.wav\n') },
     ])
     await page.getByRole('button', { name: 'Select tracks', exact: true }).tap()
-    await page.getByRole('checkbox', { name: 'Select A', exact: true }).locator('..').tap()
-    await page.getByRole('checkbox', { name: 'Select B', exact: true }).locator('..').tap()
+    await trackRow(page, 'A').locator('.track-title').tap()
+    await trackRow(page, 'B').locator('.track-title').tap()
     await expect(page.getByText('2 selected', { exact: true })).toBeVisible()
     await page.locator('.main').evaluate(element => { element.scrollTop = element.scrollHeight })
     await page.getByRole('button', { name: 'Reorder tracks', exact: true }).tap()

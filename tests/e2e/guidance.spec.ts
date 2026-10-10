@@ -1,3 +1,4 @@
+import { trackRow } from './helpers/ui'
 import { test, expect, type Page } from '@playwright/test'
 import { wavSample } from '../fixtures/audio'
 async function load(page: Page, playlist = false) {
@@ -20,7 +21,7 @@ test('library playback works before and after empty creation without adding trac
   await expect(page.locator('.now-playing strong')).toHaveText('B')
   await expect(page.locator('.track-title strong')).toHaveCount(0)
   await page.getByRole('tab', { name: 'All tracks', exact: true }).click()
-  await expect(page.getByText('Use + beside a song to add it. Then open the playlist to arrange your songs.')).toBeVisible()
+  await expect(page.getByText('Use + to add tracks, then open the Playlist tab.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Open playlist', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Next track', exact: true }).click()
   await expect(page.locator('.now-playing strong')).toHaveText('C')
@@ -33,19 +34,19 @@ test('library playback works before and after empty creation without adding trac
 test('All tracks leads a new user from browsing to a populated, draggable playlist', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1000 })
   await load(page)
-  await expect(page.getByText('Set up a playlist to drag songs into order and choose how to save it.')).toBeVisible()
+  await expect(page.getByText('Create a playlist to reorder tracks.')).toBeVisible()
   await page.getByRole('button', { name: 'Organize this folder', exact: true }).click()
   const dialog = page.getByRole('dialog')
-  await expect(dialog).toContainText('Set up a playlist to arrange and play this folder.')
-  await expect(dialog).toContainText('after setup, drag songs in the Playlist tab.')
-  await expect(dialog.getByLabel('Initial playlist order', { exact: true })).toHaveValue('folder')
+  await expect(dialog).toContainText('Choose how to save this playlist’s order.')
+  await expect(dialog).toContainText('Filename order')
+  await expect(dialog.getByLabel('Initial playlist order', { exact: true })).toHaveAttribute('data-value', 'folder')
   await page.getByRole('button', { name: 'Browse first', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Organize this folder', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Organize this folder', exact: true }).click()
   await page.getByRole('button', { name: 'Set up playlist', exact: true }).click()
   await expect(page.getByRole('tab', { name: 'Playlist', exact: true })).toHaveAttribute('aria-selected', 'true')
   await expect(page.locator('.track-title strong')).toHaveText(['A', 'B', 'C'])
-  await page.getByRole('checkbox', { name: 'Select A', exact: true }).check()
+  await trackRow(page, 'A').click({ modifiers: ['ControlOrMeta'] })
   const a = page.locator('.track-title').filter({ hasText: /^A/ }), c = page.locator('.track-title').filter({ hasText: /^C/ })
   const from = (await a.boundingBox())!, to = (await c.boundingBox())!
   await page.mouse.move(from.x + 7, from.y + 7); await page.mouse.down(); await page.mouse.move(from.x + 7, from.y + 20, { steps: 3 }); await page.mouse.move(to.x + 7, to.y + 12, { steps: 15 })
@@ -72,8 +73,8 @@ test('a browse queue remains stable when global search changes', async ({ page }
 })
 test('context menus preserve groups, support keyboard navigation, and restore focus', async ({ page }) => {
   await load(page, true)
-  await page.getByRole('checkbox', { name: 'Select A', exact: true }).check()
-  await page.getByRole('checkbox', { name: 'Select C', exact: true }).check()
+  await trackRow(page, 'A').click({ modifiers: ['ControlOrMeta'] })
+  await trackRow(page, 'C').click({ modifiers: ['ControlOrMeta'] })
   const row = page.locator('.track-row').filter({ has: page.getByRole('button', { name: 'Play A', exact: true }) })
   await row.click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Remove from playlist', exact: true }).click()
@@ -125,7 +126,7 @@ test(`the first-use guide can be skipped, remembered, replayed and completed at 
   await page.getByRole('button', { name: 'Create draft', exact: true }).click()
   await page.getByRole('tab', { name: 'All tracks', exact: true }).click()
   await page.getByRole('button', { name: 'Add A to playlist', exact: true }).click()
-  await expect(page.getByRole('region', { name: 'Getting started guide' })).toContainText('Make the order yours')
+  await expect(page.getByRole('region', { name: 'Getting started guide' })).toContainText('Reorder tracks')
   await page.getByRole('tab', { name: 'Playlist', exact: true }).click()
   await page.getByRole('button', { name: 'Next tip', exact: true }).click()
   const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export', exact: true }).click(); await download

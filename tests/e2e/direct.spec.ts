@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { mkdtemp, writeFile, readFile, rm, access, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
+import { selectValue, trackRow } from './helpers/ui'
 import { wavSample } from '../fixtures/audio'
 
 async function connectFixture(page: Page, options: { playlist?: string; browse?: boolean; audioSeconds?: number } = {}) {
@@ -93,12 +94,12 @@ test('sync choices preview cleanly on desktop/mobile and a failed native capabil
     })
     await page.getByRole('button', { name: 'New playlist', exact: true }).click()
     await page.getByRole('radio', { name: /Numbered filenames \+ M3U8/ }).check()
-    await expect(page.getByRole('dialog')).toContainText('Preview only — arrange these 2 tracks by dragging in the Playlist tab after creating the playlist.')
+    await expect(page.getByRole('dialog')).toContainText('Preview only · Reorder tracks in the Playlist tab after setup.')
     await expect(page.getByLabel('Filename changes preview')).toContainText('01 - A.wav')
-    await page.getByLabel('Initial sync order', { exact: true }).selectOption('Local.m3u8')
-    await expect(page.getByLabel('Order-authority playlist', { exact: true })).toHaveValue('Local.m3u8')
-    await expect(page.getByLabel('Order-authority playlist', { exact: true })).toHaveAttribute('readonly', '')
-    await page.getByLabel('Initial sync order', { exact: true }).selectOption('')
+    await selectValue(page.getByLabel('Initial sync order', { exact: true }), 'Local.m3u8')
+    await expect(page.getByLabel('Playlist file', { exact: true })).toHaveValue('Local.m3u8')
+    await expect(page.getByLabel('Playlist file', { exact: true })).toHaveAttribute('readonly', '')
+    await selectValue(page.getByLabel('Initial sync order', { exact: true }), '')
     await expect(page.getByLabel('Playlist name', { exact: true })).toHaveValue('My playlist')
     await expect(page.getByRole('button', { name: 'Enable filename sync', exact: true })).toBeDisabled()
     await page.getByRole('checkbox', { name: /I reviewed this folder/ }).check()
@@ -123,7 +124,7 @@ test('sync choices preview cleanly on desktop/mobile and a failed native capabil
 test('direct save verifies a temporary playlist and leaves audio bytes untouched', async ({ page }) => {
   const fixture = await connectFixture(page)
   try {
-    await page.getByRole('checkbox', { name: 'Select A', exact: true }).check()
+    await trackRow(page, 'A').click({ modifiers: ['ControlOrMeta'] })
     await page.getByRole('button', { name: 'Remove from playlist', exact: true }).click()
     await page.getByRole('button', { name: 'Save playlist', exact: true }).click()
     await expect(page.getByText('Saved to file', { exact: true })).toBeVisible()
@@ -177,7 +178,7 @@ test('number removal requires a fresh confirmation when its preview changes, blo
 test('external edits cause a conflict without overwriting the source', async ({ page }) => {
   const fixture = await connectFixture(page)
   try {
-    await page.getByRole('checkbox', { name: 'Select A', exact: true }).check()
+    await trackRow(page, 'A').click({ modifiers: ['ControlOrMeta'] })
     await page.getByRole('button', { name: 'Remove from playlist', exact: true }).click()
     const external = '#EXTM3U\nA.wav\nA.wav\n'
     await writeFile(join(fixture.directory, 'Local.m3u8'), external)
@@ -191,7 +192,7 @@ test('an uncertain close is reconciled against actual file contents', async ({ p
   const fixture = await connectFixture(page)
   try {
     await page.evaluate(() => { (window as unknown as { failClose: boolean }).failClose = true })
-    await page.getByRole('checkbox', { name: 'Select A', exact: true }).check()
+    await trackRow(page, 'A').click({ modifiers: ['ControlOrMeta'] })
     await page.getByRole('button', { name: 'Remove from playlist', exact: true }).click()
     await page.getByRole('button', { name: 'Save playlist', exact: true }).click()
     await expect(page.getByText('Save unverified', { exact: true })).toBeVisible()
@@ -248,8 +249,8 @@ test('setup reuses a differently named playlist and requires a choice when its o
   const fixture = await connectFixture(page, { playlist: '#EXTM3U\nB.wav\nA.wav\n', browse: false })
   try {
     const dialog = page.getByRole('dialog', { name: 'Set up Temporary test library' })
-    await expect(dialog.getByLabel('Playlist file', { exact: true })).toHaveValue('Local.m3u8')
-    await expect(dialog).toContainText('saved M3U8 order differs from filename order')
+    await expect(dialog.getByLabel('Playlist source', { exact: true })).toHaveAttribute('data-value', 'Local.m3u8')
+    await expect(dialog).toContainText('Saved playlist and filename order differ')
     await dialog.getByRole('radio', { name: /Numbered filenames \+ M3U8/ }).check()
     await expect(dialog.getByRole('button', { name: 'Set up playlist', exact: true })).toBeDisabled()
     await expect(dialog.getByRole('checkbox', { name: /I reviewed this folder/ })).toBeDisabled()
@@ -270,7 +271,7 @@ test('setup reuses a differently named playlist and requires a choice when its o
     expect(await readFile(join(fixture.directory, 'B.wav'))).toEqual(fixture.audio)
     await page.getByRole('button', { name: 'New playlist', exact: true }).click()
     await page.getByRole('radio', { name: /Numbered filenames \+ M3U8/ }).check()
-    await page.getByLabel('Initial sync order', { exact: true }).selectOption('Local.m3u8')
+    await selectValue(page.getByLabel('Initial sync order', { exact: true }), 'Local.m3u8')
     await page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(page.locator('.track-title strong')).toHaveText(['B', 'A'])
   } finally { await fixture.cleanup() }

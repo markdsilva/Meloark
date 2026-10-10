@@ -27,6 +27,7 @@ function fixture(extra?: string) {
 }
 beforeEach(() => {
   vi.stubGlobal('crypto', webcrypto)
+  HTMLElement.prototype.scrollIntoView = vi.fn()
   Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: async (_name: string, run: () => Promise<unknown>) => run() } })
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open') }
@@ -38,7 +39,7 @@ describe('playlist order setup choices', () => {
     render(createElement(CreatePlaylist, { setup: true, close }))
     await waitFor(() => expect(screen.getByLabelText('Playlist file')).toHaveValue(path))
     expect(activeSession()).toBeUndefined()
-    expect(screen.getByText(/saved M3U8 order differs/)).toBeInTheDocument()
+    expect(screen.getByText(/Saved playlist and filename order differ/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Use existing playlist' }))
     await waitFor(() => expect(close).toHaveBeenCalledOnce())
     expect(activeSession()?.entries.map(entry => entry.trackId)).toEqual(['t2', 't0', 't1'])
@@ -62,9 +63,10 @@ describe('playlist order setup choices', () => {
   it('requires selecting a source when multiple compatible playlists exist', async () => {
     fixture('Another.m3u8')
     render(createElement(CreatePlaylist, { setup: true, close: vi.fn() }))
-    await waitFor(() => expect(screen.getByLabelText('Playlist file')).toHaveValue('@choose'))
+    await waitFor(() => expect(screen.getByLabelText('Playlist source')).toHaveAttribute('data-value', '@choose'))
     expect(screen.getByRole('button', { name: 'Set up playlist' })).toBeDisabled()
-    fireEvent.change(screen.getByLabelText('Playlist file'), { target: { value: '' } })
+    fireEvent.click(screen.getByLabelText('Playlist source'))
+    fireEvent.click(screen.getByRole('option', { name: 'Create a new M3U8' }))
     expect(screen.getByRole('button', { name: 'Set up playlist' })).toBeEnabled()
   })
   it('distinguishes a saved file order from an unsaved draft without changing the active session while selecting', async () => {
@@ -83,7 +85,7 @@ describe('playlist order setup choices', () => {
     render(createElement(CreatePlaylist, { setup: true, close: vi.fn() }))
     await waitFor(() => expect(screen.getByLabelText('Playlist file')).toHaveValue(path))
     t.source.readFresh = async () => { throw new Error('File permission expired') }
-    fireEvent.click(screen.getByRole('button', { name: 'Inspect playlists again' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Read playlists again' }))
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('File permission expired'))
     expect(screen.getByRole('button', { name: 'Use existing playlist' })).toBeDisabled()
     expect(activeSession()).toBeUndefined()
@@ -91,9 +93,10 @@ describe('playlist order setup choices', () => {
   it('does not require a new playlist name when reusing an existing file', async () => {
     fixture()
     render(createElement(CreatePlaylist, { close: vi.fn() }))
-    await waitFor(() => expect(screen.getByLabelText('Playlist file')).toBeEnabled())
+    await waitFor(() => expect(screen.getByLabelText('Playlist source')).toBeEnabled())
     fireEvent.change(screen.getByLabelText('Playlist name'), {target:{value:''}})
-    fireEvent.change(screen.getByLabelText('Playlist file'), {target:{value:path}})
+    fireEvent.click(screen.getByLabelText('Playlist source'))
+    fireEvent.click(screen.getByRole('option', { name: path }))
     expect(screen.getByRole('button', {name:'Use existing playlist'})).toBeEnabled()
   })
   it('explains incompatible playlists and prevents using a subset as a filename-sync authority', async () => {
@@ -102,7 +105,11 @@ describe('playlist order setup choices', () => {
     render(createElement(CreatePlaylist, { close: vi.fn() }))
     await waitFor(() => expect(screen.getByRole('radio', { name: /Numbered filenames \+ M3U8/ })).toBeEnabled())
     fireEvent.click(screen.getByRole('radio', { name: /Numbered filenames \+ M3U8/ }))
-    expect(screen.getByRole('option', { name: /Different name.m3u8/ })).toBeDisabled()
-    expect(screen.getByText(/Filename sync needs every audio file/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('combobox', { name: 'Initial sync order' }))
+    const option = screen.getByRole('option', { name: /Different name.m3u8/ })
+    expect(option).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(option)
+    expect(screen.getByRole('combobox', { name: 'Initial sync order' })).toHaveAttribute('data-value', '')
+    expect(screen.getByText(/Filename sync requires every track/)).toBeInTheDocument()
   })
 })

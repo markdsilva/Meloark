@@ -174,7 +174,7 @@ test('compact rail remains scrollable and keyboard reachable in short desktop wi
   expect(await rail.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
   const help = rail.getByRole('button', { name: 'Browser capabilities', exact: true })
   await help.focus(); await page.keyboard.press('Enter')
-  await expect(page.getByRole('dialog', { name: 'Your browser, your library', exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Help & browser support', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.screenshot({ path: `test-results/sidebar-motion-collapsed-${info.project.name}.png`, fullPage: true })

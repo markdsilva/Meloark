@@ -6,6 +6,7 @@ import { dirname, naturalCompare } from '../../domain/models'
 import { planNumberRemoval, type RenameIntent } from '../../domain/orderSync'
 import { player, usePlayer } from '../../playback/player'
 import { Dialog } from '../shared/Dialog'
+import { Select } from '../shared/Select'
 
 export function RemoveFilenameNumbers({ libraryId, initialFolder, close }: { libraryId: string; initialFolder?: string; close: () => void }) {
   const library = useApp(state => state.libraries.find(item => item.id === libraryId))!
@@ -32,7 +33,7 @@ export function RemoveFilenameNumbers({ libraryId, initialFolder, close }: { lib
   }
   return <Dialog title="Remove filename numbers" wide className="playlist-create" close={() => { if (!working) close() }}>
     <p className="dialog-intro">Remove one leading number and its separators, such as “001 - Song.flac” → “Song.flac”. Review every change below; names without a numeric prefix stay as they are.</p>
-    <label className="field">Audio folder<select aria-label="Audio folder" value={folder} disabled={working} onChange={event => { setFolder(event.target.value); setReviewed(undefined); setError(undefined) }}>{folders.map(path => <option key={path} value={path}>{path || 'Library root'}</option>)}</select></label>
+    <Select label="Audio folder" value={folder} disabled={working} onChange={value => { setFolder(value); setReviewed(undefined); setError(undefined) }} options={folders.map(path => ({ value: path, label: path || 'Library root' }))} />
     <p className="callout">Matching LRC files and references in playlists inside this library are updated. Playlist order stays the same. Keep other apps from editing this folder during the change.</p>
     {owner && <p className="muted">Automatic filename sync for “{owner.name}” will be turned off. {owner.sync?.mode === 'filenames' ? 'Its order becomes an unsaved M3U8 draft. Save or Export it afterward to keep that order outside Meloark.' : 'Its M3U8 keeps your current playlist order.'}</p>}
     {previewError && <p className="field-error" role="alert">{previewError}</p>}
