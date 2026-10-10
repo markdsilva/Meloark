@@ -398,7 +398,7 @@ input[type=range] { height: 28px; }
   .navigation-drawer .sidebar .nav-item { min-height: 44px; }
   .topbar { height: 56px; padding: 0 12px; }
   .topbar .icon-button, .dialog .icon-button { width: 44px; height: 44px; }
-  .privacy-pill { display: none; }
+  .privacy-pill:not(.source-pill) { display: none; }
   .breadcrumbs { min-width: 0; gap: 6px; }
   .breadcrumbs > span { display: none; }
   .breadcrumbs strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -526,7 +526,7 @@ input[type=range] { height: 28px; }
 .sidebar .context-actions .nav-item, .sidebar .context-actions .nav-item:hover:not(:disabled), .sidebar .context-actions .nav-item.active:not(:disabled), .sidebar .context-actions .nav-item.current-library:not(:disabled) { background: transparent; box-shadow: none; }
 .sidebar .nav-item.active::before, .sidebar .nav-item.current-library::before { content: ''; position: absolute; left: 0; top: calc(50% - 8px); height: 16px; width: 2px; border-radius: 2px; background: linear-gradient(transparent, var(--accent-text), transparent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 20%, transparent); pointer-events: none; }
 .sidebar .nav-heading { letter-spacing: 1.5px; }
-.sidebar .manage-playlists { margin-top: 6px; padding-inline: 12px; }
+.nav-heading-actions { display: flex; align-items: center; gap: 2px; }
 .sidebar .forget, .sidebar .row-more { width: 24px; height: 24px; border-radius: var(--control-radius); color: var(--subtle); padding: 0; align-self: center; line-height: 1; }
 .sidebar .forget svg, .sidebar .row-more svg { display: block; width: 16px; height: 16px; stroke-width: var(--icon-stroke); }
 .sidebar .forget:hover:not(:disabled), .sidebar .row-more:hover:not(:disabled) { color: var(--text); background: var(--surface); }
@@ -576,7 +576,6 @@ input.player-range:active:not(:disabled) { --range-accent: var(--accent-hover); 
 .danger-button { background: var(--danger-surface); color: var(--danger); border: 1px solid var(--danger); }
 .danger-button:hover:not(:disabled) { background: var(--elevated); }
 .tooltip { position: fixed; z-index: 100; pointer-events: none; max-width: 260px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); background: var(--elevated); font-size: 12px; box-shadow: var(--shadow); }
-.manage-playlists { font-size: 11px; color: var(--muted); }
 .manage-playlist-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .manage-playlist-row span, .playlist-path { overflow-wrap: anywhere; }
 .manage-playlist-row small { display: block; color: var(--muted); }
@@ -628,7 +627,15 @@ dialog .guide-card { position: static; width: 100%; max-height: none; margin-top
 .source-pill { text-decoration: none; white-space: nowrap; }
 .source-pill svg { color: var(--accent-text); }
 .topbar-end { margin-left: 12px; }
-@container (max-width: 680px) { .topbar .privacy-pill { display: none; } }
+@container (max-width: 680px) {
+  .topbar .privacy-pill:not(.source-pill) { display: none; }
+  .source-pill { width: 32px; justify-content: center; padding: 0; }
+  .source-pill span { display: none; }
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .topbar .source-pill { width: 44px; height: 44px; justify-content: center; padding: 0; }
+  .topbar .source-pill span { display: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   :is(.button, .icon-button, .play-button, .text-button):active:not(:disabled), .source-pill:active { scale: 1; }
 }

@@ -135,7 +135,12 @@ test('collapse crossfades stable content, tolerates rapid toggles and respects r
 test('source badge and button feedback preserve focus and active states', async ({ page }, info) => {
   await load(page)
   const source = page.getByRole('link', { name: 'Open source (opens in a new tab)' })
+  await expect(page.locator('.topbar a[href="https://github.com/markdsilva/Meloark"]')).toHaveCount(1)
+  await expect(source).toBeVisible()
   await expect(source).toHaveAttribute('href', 'https://github.com/markdsilva/Meloark')
+  await expect(source).toHaveAttribute('target', '_blank')
+  await expect(source).toHaveAttribute('rel', 'noopener noreferrer')
+  await expect(source.locator('span')).toBeVisible()
   await expect(page.getByText('Music stays local', { exact: true })).toBeVisible()
   const shuffle = page.getByRole('button', { name: 'Shuffle', exact: true })
   await shuffle.hover(); await page.mouse.down()
@@ -147,6 +152,16 @@ test('source badge and button feedback preserve focus and active states', async 
   await page.screenshot({ path: `test-results/sidebar-motion-desktop-${info.project.name}.png`, fullPage: true })
   await page.emulateMedia({ reducedMotion: 'reduce' }); await shuffle.hover(); await page.mouse.down()
   await expect(shuffle).toHaveCSS('scale', '1'); await page.mouse.up()
+  for (const viewport of [900, 320]) {
+    await page.setViewportSize({ width: viewport, height: 844 })
+    await expect(source).toBeVisible()
+    await expect(source.locator('span')).toBeHidden()
+    await source.focus(); await expect(source).toBeFocused()
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport)
+  }
+  await expect(source).toHaveCSS('width', '44px')
+  await expect(source).toHaveCSS('height', '44px')
+  await page.screenshot({ path: `test-results/sidebar-motion-mobile-${info.project.name}.png`, fullPage: true })
 })
 
 
