@@ -284,6 +284,13 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
     await first.click(); await first.press('Alt+ArrowDown')
     await expect(page.getByRole('alert')).toContainText('Simulated interruption after native move')
     expect((await readdir(directory)).some(name => name.startsWith('.meloark-') && name !== '.meloark-order-sync.json')).toBe(true)
+    // This scenario recovers a persisted draft. Flush the debounced browser save
+    // before reload so recovery cannot race a previous cached draft's auto-sync.
+    // The numbered case below separately exercises losing the session records.
+    await page.evaluate(async () => {
+      const path = '/src/app/store.ts', { persistNow } = await import(path)
+      await persistNow(true)
+    })
     if (numbered) await page.evaluate(async () => {
       const path = '/src/app/store.ts', { activeLibrary, updateLibrary, persistNow } = await import(path)
       // Simulate lost browser session records, retaining only the folder binding.
@@ -298,7 +305,14 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
       await expect(page.getByRole('dialog').filter({ hasText: 'Set up' })).toBeVisible()
       await page.getByRole('button', { name: 'Browse first', exact: true }).click()
       await expect(page.locator('.track-title strong')).toHaveText(['Alpha', 'Beta', 'Gamma'])
-    } else expect((await snapshot()).ids).toEqual(original.ids)
+    } else {
+      await expect.poll(async () => page.evaluate(async () => {
+        const storePath = '/src/app/store.ts', syncPath = '/src/app/orderSync.ts'
+        const { activeLibrary, activeSession } = await import(storePath), { syncBusy } = await import(syncPath)
+        return syncBusy(activeLibrary().id) ? 'syncing' : activeSession()?.sync?.status
+      })).toBe('synced')
+      expect((await snapshot()).ids).toEqual(original.ids)
+    }
     for (const [index, name] of ['Alpha', 'Beta', 'Gamma'].entries()) expect(await readFile(join(directory, `${prefix(index + 1)} - ${name}.${codec}`))).toEqual(audio.get(name))
     await removeNumbers(['Alpha', 'Beta', 'Gamma'], numbered ? undefined : original.ids)
     expect(errors).toEqual([])

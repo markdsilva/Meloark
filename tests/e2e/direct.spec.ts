@@ -13,7 +13,9 @@ async function connectFixture(page: Page, options: { playlist?: string; browse?:
   const writes: string[] = []
   await page.exposeBinding('fixtureRead', async (_source, name: string) => {
     if (!['A.wav', 'B.wav', 'Local.m3u8'].includes(name)) throw new Error('Unknown fixture file')
-    return [...await readFile(join(directory, name))]
+    // Transfer one encoded string instead of serializing every audio byte as a
+    // protocol argument; the longer playback fixture otherwise delays scanning.
+    return (await readFile(join(directory, name))).toString('base64')
   })
   await page.exposeBinding('fixtureWrite', async (_source, name: string, bytes: number[]) => {
     if (name !== 'Local.m3u8') throw new Error('Attempted to mutate a non-playlist fixture')
@@ -29,11 +31,12 @@ async function connectFixture(page: Page, options: { playlist?: string; browse?:
     await unlink(join(directory, name))
   })
   await page.addInitScript(() => {
-    const host = window as unknown as { fixtureRead: (name: string) => Promise<number[]>; fixtureWrite: (name: string, bytes: number[]) => Promise<void>; fixtureExists: (name: string) => Promise<boolean>; fixtureDelete: (name: string) => Promise<void>; failClose?: boolean; failDeleteVerification?: boolean }
+    const host = window as unknown as { fixtureRead: (name: string) => Promise<string>; fixtureWrite: (name: string, bytes: number[]) => Promise<void>; fixtureExists: (name: string) => Promise<boolean>; fixtureDelete: (name: string) => Promise<void>; failClose?: boolean; failDeleteVerification?: boolean }
     const handle = (name: string) => ({ kind: 'file', name,
       getFile: async () => {
         if (!await host.fixtureExists(name)) throw new DOMException('Missing fixture', host.failDeleteVerification ? 'NotAllowedError' : 'NotFoundError')
-        return new File([new Uint8Array(await host.fixtureRead(name))], name, { type: name.endsWith('.wav') ? 'audio/wav' : 'audio/x-mpegurl' })
+        const bytes = Uint8Array.from(atob(await host.fixtureRead(name)), value => value.charCodeAt(0))
+        return new File([bytes], name, { type: name.endsWith('.wav') ? 'audio/wav' : 'audio/x-mpegurl' })
       },
       createWritable: async () => {
         let staged = new Uint8Array()
