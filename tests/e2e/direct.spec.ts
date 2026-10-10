@@ -70,8 +70,23 @@ async function connectFixture(page: Page, options: { playlist?: string; browse?:
 }
 test.beforeEach(({ page }, info) => { void page; test.skip(info.project.name !== 'chromium', 'Direct filesystem capability is tested in Chromium; portable tests run on every engine.') })
 test('sync choices preview cleanly on desktop/mobile and a failed native capability leaves music unchanged', async ({ page }) => {
-  const fixture = await connectFixture(page)
+  const fixture = await connectFixture(page, { browse: false })
   try {
+    // Switching from the saved playlist's one-line preview must reserve room
+    // for both the original filename and its proposed replacement.
+    await expect(page.getByLabel('Playlist order preview')).toBeVisible()
+    for (let pass = 0; pass < 2; pass++) {
+      await page.getByRole('radio', { name: /Numbered filenames \+ M3U8/ }).check()
+      const rows = page.getByLabel('Filename changes preview').locator(':scope > div > div')
+      await expect(rows).toHaveCount(2)
+      await expect.poll(() => rows.first().evaluate(element => {
+        const bounds = element.getBoundingClientRect(), target = element.querySelector('small')!.getBoundingClientRect()
+        return bounds.height >= 58 && target.bottom <= bounds.bottom
+      })).toBe(true)
+      await page.getByRole('radio', { name: 'M3U8 only', exact: false }).check()
+      await expect.poll(() => page.getByLabel('Playlist order preview').locator(':scope > div').evaluate(element => element.getBoundingClientRect().height)).toBe(84)
+    }
+    await page.getByRole('button', { name: 'Browse first', exact: true }).click()
     await page.evaluate(async () => {
       const path = '/src/app/store.ts', { sources, activeLibrary } = await import(path)
       sources.get(activeLibrary().id).probeRename = async () => { throw new Error('This browser does not provide native file renaming. Use M3U8-only mode.') }

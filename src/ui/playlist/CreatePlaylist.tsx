@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { FileMusic, ListOrdered } from 'lucide-react'
 import { analyzeIndexes } from '../../domain/filenameIndex'
@@ -69,7 +69,11 @@ export function CreatePlaylist({ close, setup = false }: { close: () => void; se
   const initialPaths = mode === 'folder' ? ordered.map(track => track.path) : paths
   const previewEntries = review && selectedChoice ? reviewedEntries(review, selectedChoice, library, folder) : authority ? [] : orderedEntries
   const previewCount = authority || storage !== 'm3u8' ? previewEntries.length : mode !== 'empty' ? initialPaths.length : 0
-  const list = useVirtualizer({ count: previewCount, getScrollElement: () => parent.current, estimateSize: () => storage === 'm3u8' ? 42 : 58, overscan: 6 })
+  const previewRowHeight = storage === 'm3u8' ? 42 : 58
+  const list = useVirtualizer({ count: previewCount, getScrollElement: () => parent.current, estimateSize: () => previewRowHeight, overscan: 6 })
+  // The virtualizer caches estimates; switching to two-line filename previews
+  // must discard the previous mode's shorter rows before painting.
+  useLayoutEffect(() => { list.measure() }, [list, previewRowHeight])
   let preview: ReturnType<typeof planNames> = [], previewError: string | undefined
   try { if (storage !== 'm3u8' && previewEntries.length) preview = planNames(previewEntries, library.tracks, folder, Object.fromEntries(ordered.map(track => [track.id, filenameStem(track.path)])), library.files, 'preview') }
   catch (reason) { previewError = message(reason) }
