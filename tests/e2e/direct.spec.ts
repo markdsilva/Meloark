@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { wavSample } from '../fixtures/audio'
 
-async function connectFixture(page: Page) {
+async function connectFixture(page: Page, options: { playlist?: string; browse?: boolean } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'meloark-test-'))
   const audio = Buffer.from(wavSample())
   await writeFile(join(directory, 'A.wav'), audio)
   await writeFile(join(directory, 'B.wav'), audio)
-  await writeFile(join(directory, 'Local.m3u8'), '#EXTM3U\nA.wav\nB.wav\n')
+  await writeFile(join(directory, 'Local.m3u8'), options.playlist ?? '#EXTM3U\nA.wav\nB.wav\n')
   const writes: string[] = []
   await page.exposeBinding('fixtureRead', async (_source, name: string) => {
     if (!['A.wav', 'B.wav', 'Local.m3u8'].includes(name)) throw new Error('Unknown fixture file')
@@ -55,8 +55,10 @@ async function connectFixture(page: Page) {
   await page.goto('/')
   await page.getByRole('button', { name: 'Choose a music folder' }).click()
   await expect(page.getByRole('dialog', { name: 'Set up Temporary test library' })).toBeVisible()
-  await page.getByRole('button', { name: 'Browse first', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Local', exact: true })).toBeVisible()
+  if (options.browse !== false) {
+    await page.getByRole('button', { name: 'Browse first', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Local', exact: true })).toBeVisible()
+  }
   return { directory, audio, writes, cleanup: async () => {
     const target = resolve(directory), base = resolve(tmpdir()) + sep
     if (!target.startsWith(base) || !target.slice(base.length).startsWith('meloark-test-')) throw new Error('Unsafe fixture cleanup target')
@@ -218,5 +220,38 @@ test('deletion conflicts preserve the changed file and uncertain deletion reconc
     await page.evaluate(() => { (window as unknown as { failDeleteVerification: boolean }).failDeleteVerification = false })
     await dialog.getByRole('button', { name: 'Reconcile deletion', exact: true }).click()
     await expect(dialog).toHaveCount(0); await expect(page.locator('.playlist-row')).toHaveCount(0)
+  } finally { await fixture.cleanup() }
+})
+
+
+test('setup reuses a differently named playlist and requires a choice when its order conflicts with filenames', async ({ page }) => {
+  const fixture = await connectFixture(page, { playlist: '#EXTM3U\nB.wav\nA.wav\n', browse: false })
+  try {
+    const dialog = page.getByRole('dialog', { name: 'Set up Temporary test library' })
+    await expect(dialog.getByLabel('Playlist file', { exact: true })).toHaveValue('Local.m3u8')
+    await expect(dialog).toContainText('saved M3U8 order differs from filename order')
+    await dialog.getByRole('radio', { name: /Numbered filenames \+ M3U8/ }).check()
+    await expect(dialog.getByRole('button', { name: 'Set up playlist', exact: true })).toBeDisabled()
+    await expect(dialog.getByRole('checkbox', { name: /I reviewed this folder/ })).toBeDisabled()
+    await dialog.getByRole('radio', { name: /Use saved M3U8 order/ }).check()
+    await expect(dialog.getByLabel('Filename changes preview')).toContainText('01 - B.wav')
+    await dialog.getByRole('checkbox', { name: /I reviewed this folder/ }).check()
+    await expect(dialog.getByRole('button', { name: 'Set up playlist', exact: true })).toBeEnabled()
+    await dialog.getByRole('radio', { name: /Use filename order/ }).check()
+    await expect(dialog.getByRole('checkbox', { name: /I reviewed this folder/ })).not.toBeChecked()
+    await expect(dialog.getByLabel('Filename changes preview')).toContainText('01 - A.wav')
+    await dialog.getByRole('radio', { name: /M3U8 only/ }).check()
+    await dialog.getByRole('button', { name: 'Use existing playlist', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(page.locator('.track-title strong')).toHaveText(['B', 'A'])
+    expect(fixture.writes).toEqual([])
+    expect(await readFile(join(fixture.directory, 'Local.m3u8'), 'utf-8')).toBe('#EXTM3U\nB.wav\nA.wav\n')
+    expect(await readFile(join(fixture.directory, 'A.wav'))).toEqual(fixture.audio)
+    expect(await readFile(join(fixture.directory, 'B.wav'))).toEqual(fixture.audio)
+    await page.getByRole('button', { name: 'New playlist', exact: true }).click()
+    await page.getByRole('radio', { name: /Numbered filenames \+ M3U8/ }).check()
+    await page.getByLabel('Initial sync order', { exact: true }).selectOption('Local.m3u8')
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(page.locator('.track-title strong')).toHaveText(['B', 'A'])
   } finally { await fixture.cleanup() }
 })

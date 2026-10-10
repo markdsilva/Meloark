@@ -39,6 +39,7 @@ let persistenceChain = Promise.resolve()
 let startup: Promise<void> | undefined
 export const activeLibrary = () => useApp.getState().libraries.find(library => library.id === useApp.getState().activeLibrary)
 export const activeSession = () => { const library = activeLibrary(); return library?.activePlaylist ? library.sessions[library.activePlaylist] : undefined }
+export const findPlaylistSession = (library: Library, pathOrId: string) => library.sessions[pathOrId] ?? playlistSession(library, pathOrId)
 export function notify(notice?: string) { useApp.setState({ notice }) }
 function persistSoon() {
   clearTimeout(persistenceTimer)
@@ -206,7 +207,7 @@ export function cancelScan(id: string) { scanners.get(id)?.abort() }
 export async function loadPlaylist(path: string, libraryId = activeLibrary()?.id, encoding: 'utf-8' | 'windows-1252' = 'utf-8', reload = false) {
   const library = useApp.getState().libraries.find(l => l.id === libraryId), source = libraryId ? sources.get(libraryId) : undefined
   if (!library || useApp.getState().busy) return false
-  const known = library.sessions[path] ?? Object.values(library.sessions).find(session => session.document?.path === path)
+  const known = findPlaylistSession(library, path)
   if (known && !reload) {
     updateLibrary(library.id, current => ({ ...current, activePlaylist: known.id })); selectView('playlist'); return true
   }
@@ -368,6 +369,8 @@ export function playlistPaths(library: Library) {
     .filter(path => !library.hiddenPlaylists?.includes(path)).sort(naturalCompare)
 }
 export function playlistSession(library: Library, path: string) {
+  // A legacy M3U source and its converted M3U8 output are distinct file
+  // actions. Call findPlaylistSession when an internal session ID is allowed.
   return Object.values(library.sessions).find(session => session.document ? session.document.path === path : session.id === path)
 }
 export function removePlaylistFromApp(path: string, deleted = false, libraryId = activeLibrary()?.id) {

@@ -1,4 +1,4 @@
-import { activeLibrary, activeSession, message, notify, persistNow, scanLibrary, sources, updateLibrary, useApp } from './store'
+import { activeLibrary, activeSession, message, notify, persistNow, findPlaylistSession, scanLibrary, sources, updateLibrary, useApp } from './store'
 import { AUDIO_EXTENSIONS, extension, dirname, filename, newId, naturalCompare, isDirty, type PlaylistEntry, type PlaylistSession } from '../domain/models'
 import { filenameStem, inFolder, patchReferences, planNames, planNumberRemoval, validFilename, type RenameIntent } from '../domain/orderSync'
 import { filenameIndex } from '../domain/filenameIndex'
@@ -10,6 +10,7 @@ import { clearSyncJournal, loadSyncJournal, saveSyncJournal } from '../platform/
 import { equalBytes } from '../platform/filesystem/saveProtocol'
 import { player, usePlayer } from '../playback/player'
 import { withFilesystemLock } from '../platform/filesystem/mutationLock'
+import { folderOrderError, reviewedEntries, validatePlaylistOrder, type PlaylistOrderChoice, type PlaylistOrderReview } from './playlistOrder'
 export { FILESYSTEM_LOCK, withFilesystemLock } from '../platform/filesystem/mutationLock'
 
 // One origin-wide lock also protects nested/overlapping registered libraries.
@@ -105,19 +106,26 @@ async function assertOwnership(libraryId: string, folder: string, sessionId?: st
     }
   }
 }
-export async function createSyncedPlaylist(name: string, folder: string, mode: 'filenames' | 'both', orderedTrackIds: string[], existingSessionId?: string) {
+export async function createSyncedPlaylist(name: string, folder: string, mode: 'filenames' | 'both', orderedTrackIds: string[], existingSessionId?: string, selection?: { review: PlaylistOrderReview; choice: PlaylistOrderChoice }) {
   const library = activeLibrary(), source = library && sources.get(library.id)
   if (!library?.connected || library.scanning || library.scanError || library.syncRecovery || useApp.getState().busy || !(source instanceof DirectSource)) throw new Error('Reconnect and complete the library scan before enabling filename sync.')
   // Request access first while still in the user's explicit Enable click.
   if (!await source.requestAccess('write')) throw new Error('Write permission was not granted.')
-  await assertOwnership(library.id, folder, existingSessionId)
-  const id = existingSessionId ?? `@filenames:${newId()}`, existing = existingSessionId ? library.sessions[existingSessionId] : undefined
-  if (existingSessionId && !existing) throw new Error('The selected playlist could not be loaded. Open and resolve it before enabling sync.')
-  if (existing && (existing.sync || !existing.document || existing.status === 'unverified' || !existing.document.inspected || existing.document.issues.length || existing.sourcePath?.endsWith('.m3u'))) throw new Error('Choose a fully resolved ordinary M3U8 playlist to use as the order authority.')
-  if (!existing && !validFilename(`${name.trim().replace(/\.m3u8$/i, '')}.m3u8`)) throw new Error('Choose a valid Windows playlist name without a folder path.')
-  const path = existing?.document?.path ?? inFolder(folder, `${name.trim().replace(/\.m3u8$/i, '')}.m3u8`)
-  if (mode === 'both' && !existing && (library.files.some(file => file.toLowerCase() === path.toLowerCase()) || Object.values(library.sessions).some(item => item.document?.path.toLowerCase() === path.toLowerCase()))) throw new Error('That playlist name already exists. Choose another name or use it as the order authority.')
-  const entries: PlaylistEntry[] = existing?.entries ?? orderedTrackIds.map(trackId => {
+  const known = existingSessionId ? findPlaylistSession(library, existingSessionId) : undefined
+  await assertOwnership(library.id, folder, mode === 'both' ? known?.id : undefined)
+  const existing = mode === 'both' ? known : undefined
+  if (existingSessionId && !known && !selection) throw new Error('The selected playlist could not be loaded. Open and resolve it before enabling sync.')
+  if (existing && (existing.sync || !existing.document || existing.status === 'unverified' || !existing.document.inspected || existing.document.issues.length || !selection && extension(existing.sourcePath ?? '') === 'm3u')) throw new Error('Choose a fully resolved ordinary M3U8 playlist to use as the order authority.')
+  if (!existing && !(mode === 'both' && selection) && !validFilename(`${name.trim().replace(/\.m3u8$/i, '')}.m3u8`)) throw new Error('Choose a valid Windows playlist name without a folder path.')
+  if (selection && (selection.review.libraryId !== library.id || existingSessionId && ![selection.review.path, selection.review.sessionId].includes(existingSessionId))) throw new Error('Inspect the selected playlist again before enabling sync.')
+  if (selection) {
+    const error = folderOrderError(selection.review.document.entries, library, folder)
+    if (error) throw new Error(error)
+  }
+  const path = mode === 'both' && selection ? selection.review.path : existing?.document?.path ?? inFolder(folder, `${name.trim().replace(/\.m3u8$/i, '')}.m3u8`)
+  const id = mode === 'both' && (existing || selection) ? existing?.id ?? path : `@filenames:${newId()}`
+  if (mode === 'both' && !existing && !selection && (library.files.some(file => file.toLowerCase() === path.toLowerCase()) || Object.values(library.sessions).some(item => item.document?.path.toLowerCase() === path.toLowerCase()))) throw new Error('That playlist name already exists. Choose another name or use it as the order authority.')
+  const entries: PlaylistEntry[] = selection ? reviewedEntries(selection.review, selection.choice, library, folder) : existing?.entries ?? orderedTrackIds.map(trackId => {
     const track = library.tracks[trackId]
     if (!track) throw new Error('A track disappeared. Refresh and review the order.')
     return { id: newId(), trackId, path: track.path, raw: mode === 'both' ? relativeReference(track.path, path) : track.filename, prelude: [] }
@@ -125,11 +133,14 @@ export async function createSyncedPlaylist(name: string, folder: string, mode: '
   const stems = Object.fromEntries(entries.map(entry => [entry.trackId!, filenameStem(library.tracks[entry.trackId!]?.path ?? '')]))
   planNames(entries, library.tracks, folder, stems, library.files)
   await withFilesystemLock(async () => {
+    if (selection) await validatePlaylistOrder(selection.review)
     if (await readJournal(source)) throw new Error('Recover the existing filename sync first.')
     await source.probeRename(folder)
+    if (selection) await validatePlaylistOrder(selection.review)
   })
   const session: PlaylistSession = { ...(existing ?? { id, name: name.trim(), entries, saved: [], baseline: null, undo: [], redo: [], revision: 0, status: 'dirty' }),
-    document: mode === 'both' ? existing?.document ?? emptyDocument(path) : undefined,
+    document: mode === 'both' ? selection?.review.document ?? existing?.document ?? emptyDocument(path) : undefined,
+    ...(mode === 'both' && selection ? { name: filename(path), baseline: selection.review.bytes, saved: selection.review.document.entries, entries, sourcePath: path } : {}),
     sync: { mode, folder, stems, enabled: true, status: 'queued', committedRevision: -1 }, error: undefined }
   updateLibrary(library.id, current => ({ ...current, activePlaylist: session.id, sessions: { ...current.sessions, [session.id]: session } }))
   useApp.setState({ view: 'playlist' })
@@ -137,10 +148,54 @@ export async function createSyncedPlaylist(name: string, folder: string, mode: '
   scheduleSync(library.id, session.id)
 }
 
-async function makeJournal(libraryId: string, sessionId: string, source: DirectSource, removal?: { folder: string; reviewed: RenameIntent[] }) {
+// External changes are adopted only after a fresh, explicit review. The same
+// journal, inventory checks, native moves and byte verification handle this
+// batch; a second edit after the preview never becomes an implicit overwrite.
+export async function reconcileOrderSync(review: PlaylistOrderReview, choice: 'saved' | 'draft') {
+  const library = useApp.getState().libraries.find(item => item.id === review.libraryId), source = sources.get(review.libraryId)
+  const session = library && findPlaylistSession(library, review.path)
+  if (!library || !session?.sync || session.sync.mode !== 'both' || session.sync.status !== 'error' || running.has(library.id) || library.syncRecovery || useApp.getState().busy || !(source instanceof DirectSource)) throw new Error('Finish scanning, saving or recovery before reviewing an interrupted order sync.')
+  if (!await source.requestAccess('write')) throw new Error('Write permission was not granted. Your order is preserved.')
+  clearTimeout(timers.get(library.id)); running.add(library.id); useApp.setState({ busy: true })
+  try {
+    await withFilesystemLock(async () => {
+      const { library: current, session: latest } = await validatePlaylistOrder(review)
+      if (!latest?.sync || latest.id !== session.id) throw new Error('The sync session changed. Inspect the playlist again.')
+      if (await readJournal(source) || await loadSyncJournal(library.id)) throw new Error('Recover the interrupted filename operation first.')
+      const playback = usePlayer.getState()
+      if (playback.current && playback.context?.libraryId === library.id && !playback.renameSafe) throw new Error('Stop playback before reconciling this disk-backed track.')
+      const savedError = folderOrderError(review.document.entries, current, latest.sync.folder)
+      if (savedError) throw new Error(savedError)
+      const entries = reviewedEntries(review, choice, current, latest.sync.folder)
+      const error = folderOrderError(entries, current, latest.sync.folder)
+      if (error) throw new Error(error)
+      await source.probeRename(latest.sync.folder)
+      await validatePlaylistOrder(review)
+      updateLibrary(library.id, value => ({ ...value, sessions: { ...value.sessions, [session.id]: {
+        ...latest, document: review.document, baseline: review.bytes, saved: review.document.entries, entries,
+        revision: latest.revision + 1, status: 'dirty', error: undefined,
+        undo: [...latest.undo, { before: latest.entries, after: entries, label: 'Reconcile playlist order' }], redo: [],
+        sync: { ...latest.sync!, enabled: true, committedRevision: -1, status: 'syncing', error: undefined },
+      } } }))
+      await persistNow(true)
+      const journal = await makeJournal(library.id, session.id, source, undefined, true)
+      const done = await executeJournal(source, journal, null, saveSyncJournal)
+      await commitJournal(done, source)
+    })
+    notify(`Order reconciled. Numbered filenames and ${review.path} now agree.`)
+  } catch (error) {
+    const recovery = await checkRecovery(library.id)
+    setSync(library.id, session.id, recovery ? 'recovery' : 'error', message(error))
+    throw error
+  } finally {
+    running.delete(library.id); useApp.setState({ busy: false })
+  }
+}
+
+async function makeJournal(libraryId: string, sessionId: string, source: DirectSource, removal?: { folder: string; reviewed: RenameIntent[] }, reconciliation = false) {
   const library = useApp.getState().libraries.find(item => item.id === libraryId)!, session = library.sessions[sessionId], sync = session?.sync
   const folder = removal?.folder ?? sync!.folder
-  if (!library.connected || library.scanning || library.scanError || !removal && useApp.getState().busy) throw new Error('Wait for a complete scan and other file operations before syncing.')
+  if (!library.connected || library.scanning || library.scanError || !removal && !reconciliation && useApp.getState().busy) throw new Error('Wait for a complete scan and other file operations before syncing.')
   await assertOwnership(libraryId, folder, sessionId)
   // Rescan the actual directory before every batch, not only remembered paths.
   const inventory = new Map<string, { size: number; lastModified: number }>()
@@ -164,7 +219,7 @@ async function makeJournal(libraryId: string, sessionId: string, source: DirectS
     if (!file || file.size > MAX_BYTES) throw new Error(`Cannot inspect playlist ${path}.`)
     const before = new Uint8Array(await file.arrayBuffer())
     if (sync?.mode === 'both' && session.document?.path === path) {
-      if (!session.baseline || !equalBytes(session.baseline, before)) throw new Error('The order-authority playlist changed outside Meloark. Disable sync and reload it before enabling again.')
+      if (!session.baseline || !equalBytes(session.baseline, before)) throw new Error('The order-authority playlist changed outside Meloark. Review playlist order to choose which order to keep, or disable sync and reload it.')
       continue
     }
     const after = patchReferences(before, path, paths, mapping)

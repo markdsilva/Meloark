@@ -20,6 +20,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
   const directory = await mkdtemp(join(tmpdir(), 'meloark-native-sync-'))
   const profile = await mkdtemp(join(tmpdir(), 'meloark-native-profile-'))
   const codec = numbered ? 'flac' : 'wav'
+  const authorityFile = numbered ? 'Ordered.m3u8' : 'Road trip.m3u8'
   // Keep playback on the same recording throughout a slow native write.
   const audio = new Map(['Alpha', 'Beta', 'Gamma'].map((name, i) => [name, Buffer.from(wavSample(60 + i))]))
   const prefix = (number: number) => String(number).padStart(numbered ? 3 : 2, '0')
@@ -36,6 +37,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
   }
   await writeFile(join(directory, `${originalName('Alpha')}.lrc`), '[00:00]A local lyric\n')
   await writeFile(join(directory, 'Other.m3u8'), `#EXTM3U\r\n#keep this comment\r\n${originalName('Alpha')}.${codec}\r\n${originalName('Alpha')}.${codec}\r\n${originalName('Beta')}.${codec}\r\n`)
+  if (!numbered) await writeFile(join(directory, authorityFile), `#EXTM3U\nGamma.wav\nAlpha.wav\nBeta.wav\n`)
   const browser = await playwright.chromium.launchPersistentContext(profile, { executablePath: process.env.MELOARK_CHROMIUM_EXECUTABLE, headless: false, viewport: { width: 1440, height: 1000 } })
   const page = await browser.newPage(), errors: string[] = []
   try {
@@ -95,8 +97,13 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
       await page.getByRole('button', { name: 'New playlist', exact: true }).click()
     }
     await page.getByRole('radio', { name: /Numbered filenames \+ M3U8/ }).check()
+    if (!numbered) {
+      await expect(page.getByLabel('Initial sync order', { exact: true })).toHaveValue(authorityFile)
+      await expect(page.getByRole('button', { name: 'Set up playlist', exact: true })).toBeDisabled()
+      await page.getByRole('radio', { name: /Use saved M3U8 order/ }).check()
+    }
     await expect(page.getByRole('dialog')).toContainText(`Preview only — arrange these 3 tracks by dragging in the Playlist tab after ${numbered ? 'creating the playlist' : 'setup'}.`)
-    await page.getByLabel('Playlist name', { exact: true }).fill('Ordered')
+    if (numbered) await page.getByLabel('Playlist name', { exact: true }).fill('Ordered')
     await page.getByRole('checkbox', { name: /I reviewed this folder/ }).check()
     await page.screenshot({ path: `test-results/native-sync-${codec}-preview.png`, fullPage: true })
     await page.getByRole('button', { name: numbered ? 'Enable filename sync' : 'Set up playlist', exact: true }).click()
@@ -104,7 +111,49 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
     await execute('import', ['-window', 'root', 'test-results/native-write-permission.png'])
     await key('Tab', 'Return')
     await expect(page.getByRole('status').filter({ hasText: /^Synced$/ })).toBeVisible()
-    expect(await readdir(directory)).toEqual(expect.arrayContaining([`${prefix(1)} - Alpha.${codec}`, `${prefix(2)} - Beta.${codec}`, `${prefix(3)} - Gamma.${codec}`, `${prefix(1)} - Alpha.lrc`, 'Ordered.m3u8']))
+    async function restoreFilenameOrder() {
+      const gammaRow = page.getByRole('row').filter({ has: page.locator('.track-title').filter({ hasText: /^Gamma/ }) })
+      await gammaRow.click(); await gammaRow.press('Alt+ArrowDown')
+      await expect(page.locator('.track-title strong')).toHaveText(['Alpha', 'Gamma', 'Beta'])
+      await gammaRow.press('Alt+ArrowDown')
+      await expect(page.locator('.track-title strong')).toHaveText(['Alpha', 'Beta', 'Gamma'])
+      await expect(page.getByRole('status').filter({ hasText: /^Synced$/ })).toBeVisible()
+      await expect.poll(async () => readFile(join(directory, authorityFile), 'utf-8')).toBe(`#EXTM3U\n${prefix(1)} - Alpha.${codec}\n${prefix(2)} - Beta.${codec}\n${prefix(3)} - Gamma.${codec}\n`)
+    }
+    if (!numbered) {
+      await expect(page.locator('.track-title strong')).toHaveText(['Gamma', 'Alpha', 'Beta'])
+      expect(await readFile(join(directory, authorityFile), 'utf-8')).toBe(`#EXTM3U\n01 - Gamma.wav\n02 - Alpha.wav\n03 - Beta.wav\n`)
+      expect(await readFile(join(directory, '01 - Gamma.wav'))).toEqual(audio.get('Gamma'))
+      expect((await readdir(directory)).filter(name => /\.m3u8$/.test(name)).sort()).toEqual(['Other.m3u8', authorityFile].sort())
+      await restoreFilenameOrder()
+    }
+    // Exercise the actual external-edit review UI and native journal path.
+    await writeFile(join(directory, authorityFile), `#EXTM3U\n${prefix(3)} - Gamma.${codec}\n${prefix(1)} - Alpha.${codec}\n${prefix(2)} - Beta.${codec}\n`)
+    const alphaRow = page.getByRole('row').filter({ has: page.locator('.track-title').filter({ hasText: /^Alpha/ }) })
+    await alphaRow.click(); await alphaRow.press('Alt+ArrowDown')
+    await expect(page.getByRole('status').filter({ hasText: 'changed outside Meloark' })).toBeVisible()
+    await page.getByRole('button', { name: 'Review playlist order', exact: true }).click()
+    const orderReview = page.getByRole('dialog', { name: 'Review playlist order', exact: true })
+    await orderReview.getByRole('radio', { name: numbered ? /Keep Meloark order/ : /Import saved M3U8 order/ }).check()
+    await expect(orderReview.getByLabel('Reconciled filename preview')).toContainText(`→ ${prefix(1)} - ${numbered ? 'Beta' : 'Gamma'}.${codec}`)
+    await page.setViewportSize({ width: 320, height: 844 })
+    expect(await orderReview.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+    await page.screenshot({ path: `test-results/native-order-review-${codec}-mobile.png`, fullPage: true })
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await orderReview.getByRole('checkbox', { name: /I reviewed this order/ }).check()
+    await orderReview.getByRole('button', { name: 'Apply reviewed order', exact: true }).click()
+    await expect(orderReview).toHaveCount(0)
+    await expect(page.locator('.track-title strong')).toHaveText(numbered ? ['Beta', 'Alpha', 'Gamma'] : ['Gamma', 'Alpha', 'Beta'])
+    const firstName = numbered ? 'Beta' : 'Gamma'
+    expect(await readFile(join(directory, `${prefix(1)} - ${firstName}.${codec}`))).toEqual(audio.get(firstName))
+    if (numbered) {
+      const betaRow = page.getByRole('row').filter({ has: page.locator('.track-title').filter({ hasText: /^Beta/ }) })
+      await betaRow.click(); await betaRow.press('Alt+ArrowDown')
+      await expect(page.locator('.track-title strong')).toHaveText(['Alpha', 'Beta', 'Gamma'])
+      await expect.poll(async () => readFile(join(directory, authorityFile), 'utf-8')).toBe(`#EXTM3U\n${prefix(1)} - Alpha.${codec}\n${prefix(2)} - Beta.${codec}\n${prefix(3)} - Gamma.${codec}\n`)
+      await expect(page.getByRole('status').filter({ hasText: /^Synced$/ })).toBeVisible()
+    } else await restoreFilenameOrder()
+    expect(await readdir(directory)).toEqual(expect.arrayContaining([`${prefix(1)} - Alpha.${codec}`, `${prefix(2)} - Beta.${codec}`, `${prefix(3)} - Gamma.${codec}`, `${prefix(1)} - Alpha.lrc`, authorityFile]))
     expect((await readFile(join(directory, 'Other.m3u8'))).toString()).toBe(`#EXTM3U\r\n#keep this comment\r\n${prefix(1)} - Alpha.${codec}\r\n${prefix(1)} - Alpha.${codec}\r\n${prefix(2)} - Beta.${codec}\r\n`)
     const snapshot = async () => page.evaluate(() => new Promise<{ ids: string[]; paths: string[] }>((resolve, reject) => {
       // Inspect the persisted result, including when running the minified build.
@@ -124,7 +173,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
     const from = (await alpha.boundingBox())!, to = (await gamma.boundingBox())!
     await page.mouse.move(from.x + 60, from.y + 20); await page.mouse.down(); await page.mouse.move(from.x + 60, from.y + 35, { steps: 3 }); await page.mouse.move(to.x + 60, to.y + 28, { steps: 10 }); await page.mouse.up()
     await expect(page.locator('.track-title strong')).toHaveText(['Beta', 'Gamma', 'Alpha'])
-    await expect.poll(async () => (await readFile(join(directory, 'Ordered.m3u8'))).toString()).toBe(`#EXTM3U\n${prefix(1)} - Beta.${codec}\n${prefix(2)} - Gamma.${codec}\n${prefix(3)} - Alpha.${codec}\n`)
+    await expect.poll(async () => (await readFile(join(directory, authorityFile))).toString()).toBe(`#EXTM3U\n${prefix(1)} - Beta.${codec}\n${prefix(2)} - Gamma.${codec}\n${prefix(3)} - Alpha.${codec}\n`)
     expect(await readFile(join(directory, `${prefix(3)} - Alpha.${codec}`))).toEqual(audio.get('Alpha'))
     expect(await readFile(join(directory, `${prefix(1)} - Beta.${codec}`))).toEqual(audio.get('Beta'))
     expect(await readFile(join(directory, `${prefix(2)} - Gamma.${codec}`))).toEqual(audio.get('Gamma'))
@@ -194,7 +243,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
       await expect(dialog).toHaveCount(0)
       await expect.poll(async () => (await readdir(directory)).some(name => name.startsWith('.meloark-'))).toBe(false)
       await expect(page.getByRole('button', { name: 'Sync settings', exact: true })).toHaveCount(0)
-      expect(await readFile(join(directory, 'Ordered.m3u8'), 'utf-8')).toBe(`#EXTM3U\n${order.map(name => `${name}.${codec}\n`).join('')}`)
+      expect(await readFile(join(directory, authorityFile), 'utf-8')).toBe(`#EXTM3U\n${order.map(name => `${name}.${codec}\n`).join('')}`)
       expect(await readFile(join(directory, 'Other.m3u8'), 'utf-8')).toBe(`#EXTM3U\r\n#keep this comment\r\nAlpha.${codec}\r\nAlpha.${codec}\r\nBeta.${codec}\r\n`)
       expect(await readFile(join(directory, 'Alpha.lrc'), 'utf-8')).toBe('[00:00]A local lyric\n')
       for (const [name, bytes] of audio) expect(await readFile(join(directory, `${name}.${codec}`))).toEqual(bytes)
@@ -219,7 +268,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
         await first.click(); await first.press('Alt+ArrowDown')
         await expect(page.locator('.track-title strong')).toHaveText([order[1], order[0], order[2]])
         // Subsequent draft edits no longer number files or rewrite the M3U8.
-        expect(await readFile(join(directory, 'Ordered.m3u8'), 'utf-8')).toBe(`#EXTM3U\n${order.map(name => `${name}.${codec}\n`).join('')}`)
+        expect(await readFile(join(directory, authorityFile), 'utf-8')).toBe(`#EXTM3U\n${order.map(name => `${name}.${codec}\n`).join('')}`)
         await expect(page.getByText('Unsaved draft', { exact: true })).toBeVisible()
       }
       for (const [name, bytes] of audio) expect(await readFile(join(directory, `${name}.${codec}`))).toEqual(bytes)
@@ -243,7 +292,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
     })
     await page.reload()
     await page.getByRole('button', { name: 'Recover filename sync', exact: true }).click()
-    await expect.poll(async () => (await readFile(join(directory, 'Ordered.m3u8'))).toString()).toBe(`#EXTM3U\n${prefix(1)} - Alpha.${codec}\n${prefix(2)} - Beta.${codec}\n${prefix(3)} - Gamma.${codec}\n`)
+    await expect.poll(async () => (await readFile(join(directory, authorityFile))).toString()).toBe(`#EXTM3U\n${prefix(1)} - Alpha.${codec}\n${prefix(2)} - Beta.${codec}\n${prefix(3)} - Gamma.${codec}\n`)
     await expect.poll(async () => (await readdir(directory)).some(name => name.startsWith('.meloark-'))).toBe(false)
     if (numbered) {
       await expect(page.getByRole('dialog').filter({ hasText: 'Set up' })).toBeVisible()
