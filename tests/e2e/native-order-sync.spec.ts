@@ -81,15 +81,26 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
       // Wait for the real write-permission prompt rather than sending its
       // acceptance key before Chrome has displayed it on a slower build.
       const window = (await execute('xdotool', ['search', '--onlyvisible', '--name', 'Meloark'])).stdout.trim().split('\n').at(-1)!
-      const windowGeometry = (await execute('xdotool', ['getwindowgeometry', '--shell', window])).stdout
-      const windowWidth = Number(windowGeometry.match(/WIDTH=(\d+)/)![1])
+      const geometry = (await execute('xdotool', ['getwindowgeometry', '--shell', window])).stdout
+      const width = Number(geometry.match(/WIDTH=(\d+)/)![1])
+      let permissionConfirmed = false
       await expect.poll(async () => {
         if (await readFile(join(directory, 'First order.m3u8'), 'utf-8').catch(() => '') === expected) return true
         // Chrome's browser-level permission bubble is outside the page DOM.
-        // Accept its Save changes button on the fixed native-test viewport.
-        await execute('xdotool', ['mousemove', '--window', window, String(Math.round(windowWidth / 2 + 140)), '215', 'click', '1'])
+        // Use the same keyboard confirmation as the other native prompts;
+        // browser chrome and system font metrics can move its buttons.
+        // Chrome keeps document.hasFocus() true behind this prompt. Observe
+        // its light native panel above the dark page before confirming once.
+        // Sample an area, rather than depending on a button's exact pixels.
+        if (!permissionConfirmed) {
+          const panel = await execute('import', ['-window', window, '-crop', `100x60+${Math.round(width / 2 - 50)}+105`, '-format', '%[fx:mean]', 'info:'])
+          if (Number(panel.stdout) > 0.85) {
+            await key('Tab', 'Return')
+            permissionConfirmed = true
+          }
+        }
         return false
-      }, { timeout: 30_000 }).toBe(true)
+      }, { timeout: 30_000, intervals: [500, 1000] }).toBe(true)
       await expect(page.getByText('Saved to file', { exact: true })).toBeVisible()
       expect(await readFile(join(directory, 'First order.m3u8'), 'utf-8')).toBe(expected)
       expect(await readFile(join(directory, `${originalName('Alpha')}.${codec}`))).toEqual(audio.get('Alpha'))
