@@ -1,6 +1,6 @@
-.track-list { --track-columns: 44px minmax(150px, 2fr) minmax(90px, 1fr) 150px 48px 68px; --track-gap: 12px; --track-padding: 10px; --title-inset: 52px; }
+.track-list { position: relative; --track-columns: 44px minmax(150px, 2fr) minmax(90px, 1fr) 150px 48px 68px; --track-gap: 12px; --track-padding: 10px; --title-inset: 52px; }
 .track-header, .track-row { display: grid; grid-template-columns: var(--track-columns); gap: var(--track-gap); align-items: center; padding: 0 var(--track-padding); }
-.track-header { position: sticky; top: 0; z-index: 2; height: 42px; margin: 0; border-bottom: 1px solid var(--border); background: var(--bg); color: var(--subtle); font-size: 12px; }
+.track-header { position: sticky; top: 0; z-index: 2; height: 42px; margin: 0; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 78%, transparent); backdrop-filter: blur(12px); color: var(--muted); font-size: 12px; }
 .track-header > span:first-child { padding: 0; text-align: center; }
 .track-header > span:nth-child(2) { padding-left: var(--title-inset); }
 .track-header > span:nth-child(4) { padding-left: 4px; }
@@ -20,6 +20,9 @@
 .track-format { font-size: 11px; }
 .selection-toolbar { min-height: 44px; font-size: 12px; }
 .selection-toolbar .text-button { font-size: 12px; }
+/* Selection actions replace the heading without moving rows during a drag. */
+.selection-toolbar.floating { position: absolute; top: 0; left: 0; right: 0; z-index: 3; min-height: 42px; padding: 0 10px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.track-list:has(> .selection-toolbar.floating) .track-header { opacity: 0; }
 .track-scroll { overflow: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; height: clamp(260px, calc(100dvh - 470px), 700px); min-height: 260px; scroll-padding-top: 42px; }
 @container (max-width: 950px) {
   .track-list { --track-columns: 44px minmax(100px, 1fr) 130px 48px 68px; }
@@ -40,7 +43,11 @@
   .track-title { gap: 6px; }
   .track-scroll { height: max(258px, calc(100dvh - 390px)); min-height: 258px; }
 }
+@media (prefers-reduced-transparency: reduce) {
+  .track-header { background: var(--surface); backdrop-filter: none; }
+}
 @media (forced-colors: active) {
+  .track-header { background: Canvas; color: CanvasText; backdrop-filter: none; }
   .track-row.selected { outline: 2px solid Highlight; outline-offset: -2px; }
   .track-row.drop-target { border-bottom: 2px solid Highlight; }
 }

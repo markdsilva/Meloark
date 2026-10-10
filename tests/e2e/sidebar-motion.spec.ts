@@ -87,8 +87,10 @@ test('resizing stays within narrow desktop layouts and mobile navigation remains
   await expect(page.locator('#lyrics-panel')).toBeVisible()
   await page.getByRole('button', { name: 'Lyrics', exact: true }).click()
   await startDrag(page); await page.mouse.move(320, 250)
-  await page.setViewportSize({ width: 390, height: 844 }); await page.mouse.up()
+  await page.setViewportSize({ width: 390, height: 844 })
+  // Wait for the viewport resize to cancel the drag before releasing the pointer.
   await expect(page.getByRole('separator')).toHaveCount(0)
+  await page.mouse.up()
   await expect(page.locator('.app')).not.toHaveClass(/sidebar-resizing/)
   await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click()
   await expect(page.getByRole('dialog', { name: 'Navigation', exact: true })).toBeVisible()

@@ -100,7 +100,7 @@ test('keyboard shortcuts, fast edits, dismissal and disconnected libraries remai
   await expect(results(page).getByRole('option')).toHaveCount(3)
   await search(page).press('ArrowDown'); await expect(search(page)).toHaveAttribute('aria-activedescendant', /option-1$/)
   await search(page).press('Tab'); await expect(results(page)).toHaveCount(0)
-  await search(page).click(); await page.locator('h1').click(); await expect(results(page)).toHaveCount(0)
+  await search(page).click(); await page.getByRole('tab', { name: 'Playlist', exact: true }).click(); await expect(results(page)).toHaveCount(0)
   await page.reload()
   await expect(page.getByText('Reconnect your music', { exact: true })).toBeVisible()
   await search(page).fill('Sunrise')

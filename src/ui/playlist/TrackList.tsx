@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { DragDropProvider, DragOverlay, useDraggable, useDroppable } from '@dnd-kit/react'
 import { PointerSensor, PointerActivationConstraints } from '@dnd-kit/dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -71,7 +72,7 @@ function TrackRow({ row, index, selected, reorderable, selecting, touchReorder, 
     </div>
   </div>
 }
-export function TrackList({ query, folder, artist, sortBy, playlist }: { query: string; folder: string; artist: string; sortBy: string; playlist: boolean }) {
+export function TrackList({ query, folder, artist, sortBy, playlist, countHost }: { query: string; folder: string; artist: string; sortBy: string; playlist: boolean; countHost?: HTMLElement | null }) {
   const library = useApp(s => s.libraries.find(l => l.id === s.activeLibrary))
   const session = library?.activePlaylist ? library.sessions[library.activePlaylist] : undefined
   const busy = useApp(s => s.busy) || !!library?.syncRecovery || playlist && session?.status === 'unverified'
@@ -151,17 +152,19 @@ export function TrackList({ query, folder, artist, sortBy, playlist }: { query: 
     const indexes = session.entries.flatMap((entry, index) => validSelected.has(entry.id) ? [index] : [])
     reorderEntries(validSelected, offset < 0 ? Math.max(0, indexes[0] - 1) : Math.min(session.entries.length, indexes.at(-1)! + 2))
   }
+  const trackCount = `${rows.length.toLocaleString()} ${query || folder || artist ? 'matching ' : ''}tracks`
   if (!library) return null
   return <section className="track-list" data-tour="tracks" aria-label={playlist ? 'Playlist tracks' : 'Library tracks'}>
-    <div className="selection-toolbar">
-      <span>{validSelected.size ? `${validSelected.size} selected` : `${rows.length.toLocaleString()} ${query || folder || artist ? 'matching ' : ''}tracks`}</span>
+    {countHost && createPortal(trackCount, countHost)}
+    {(!countHost || mobile || validSelected.size > 0 || playlist && !reorderable) && <div className={`selection-toolbar ${countHost && !mobile ? 'floating' : ''}`}>
+      {validSelected.size > 0 ? <span>{validSelected.size} selected</span> : !countHost ? <span>{trackCount}</span> : null}
       {mobile && <button className={`text-button toggle-button ${selecting ? 'active' : ''}`} aria-pressed={selecting} onClick={() => { setSelecting(!selecting); if (selecting) setSelected(new Set()) }}>{selecting ? 'Done selecting' : 'Select tracks'}</button>}
       {mobile && reorderable && <button className={`text-button toggle-button ${touchReorder ? 'active' : ''}`} aria-pressed={touchReorder} onClick={() => setTouchReorder(!touchReorder)}>{touchReorder ? 'Done reordering' : 'Reorder tracks'}</button>}
       {validSelected.size > 0 && <div>{playlist ? <>
         {!session?.sync && <button className="text-button" disabled={busy} onClick={() => removeEntries(validSelected)}><Trash2 size={15} />Remove from playlist</button>}
       </> : <button className="text-button" disabled={!editable || !!session?.sync} data-tooltip={!editable ? 'Create or open an editable playlist first' : undefined} onClick={() => addTracks([...validSelected])}><Plus size={15} />Add to playlist</button>}<button className="text-button" onClick={() => setSelected(new Set())}>Clear</button></div>}
       {playlist && !reorderable && <span className="muted">Clear filters and choose playlist order to reorder</span>}
-    </div>
+    </div>}
     <div role="grid" aria-label={playlist ? 'Playlist track list' : 'Library track list'} aria-rowcount={rows.length + 1} aria-colcount={6} aria-multiselectable="true" onKeyDown={event => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return
       if (!busy && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') { event.preventDefault(); setSelected(new Set(rows.map(row => row.id))) }

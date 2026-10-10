@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test'
 import { taggedWav } from '../fixtures/audio'
-import { trackRow } from './helpers/ui'
+import { selectValue, trackRow } from './helpers/ui'
 
 async function library(page: import('@playwright/test').Page) {
   await page.goto('/')
   await page.getByLabel('Select library files', { exact: true }).setInputFiles([
-    ...['Alpha', 'Beta', 'Charlie'].map(name => ({ name: `${name}.wav`, mimeType: 'audio/wav', buffer: Buffer.from(taggedWav(60, { title: name, artist: 'Test artist', album: 'Test album' })) })),
+    ...['Alpha', 'Beta', 'Charlie'].map(name => ({ name: `${name}.wav`, mimeType: 'audio/wav', buffer: Buffer.from(taggedWav(60, { title: name, artist: name === 'Beta' ? 'Other artist' : 'Test artist', album: 'Test album' })) })),
     { name: 'Mix.m3u8', mimeType: 'audio/x-mpegurl', buffer: Buffer.from('#EXTM3U\nAlpha.wav\nBeta.wav\nCharlie.wav\n') },
     { name: 'Other.m3u8', mimeType: 'audio/x-mpegurl', buffer: Buffer.from('#EXTM3U\nCharlie.wav\nAlpha.wav\nBeta.wav\n') },
   ])
@@ -20,7 +20,10 @@ test('row selection supports modifiers, Space and ranges without starting playba
   await library(page)
   await expect(page.getByRole('checkbox')).toHaveCount(0)
   const a = trackRow(page, 'Alpha'), b = trackRow(page, 'Beta'), c = trackRow(page, 'Charlie')
+  const rowTop = (await a.boundingBox())!.y
   await a.click(); await c.click({ modifiers: ['ControlOrMeta'] })
+  expect((await a.boundingBox())!.y).toBe(rowTop)
+  await expect(page.locator('.browse-count')).toHaveText('3 tracks')
   await expect(page.getByText('2 selected', { exact: true })).toBeVisible()
   await c.focus(); await c.press('Space'); await expect(c).toHaveAttribute('aria-selected', 'false')
   await a.click(); await c.click({ modifiers: ['Shift'] }); await expect(b).toHaveAttribute('aria-selected', 'true')
@@ -50,10 +53,19 @@ test('desktop playlist select supports typeahead, Escape and normal Tab inside a
   await expect(dialog.getByLabel('Playlist order preview')).toContainText('Charlie.wav')
   await page.screenshot({ path: 'test-results/ui-overhaul-create.png' })
   await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0)
+  await page.getByRole('button', { name: 'Track filters', exact: true }).click()
+  await selectValue(page.getByRole('combobox', { name: 'Artist', exact: true }), 'Other artist')
+  await expect(page.locator('.browse-count')).toHaveText('1 matching tracks')
+  await expect(page.locator('.track-title strong')).toHaveText(['Beta'])
+  await expect(page.locator('.collection-meta')).toContainText('3 tracks')
+  await page.getByRole('button', { name: 'Clear filters', exact: true }).click()
+  await expect(page.locator('.browse-count')).toHaveText('3 tracks')
+  await expect(page.locator('.track-title strong')).toHaveText(['Alpha', 'Beta', 'Charlie'])
 })
 
 test('track headings align with row content as workspace width changes', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 }); await library(page)
+  await expect(page.locator('.selection-toolbar')).toHaveCount(0)
   await page.getByRole('button', { name: 'Play Alpha', exact: true }).click()
   for (const width of [1600, 1100, 800, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 })
@@ -67,6 +79,22 @@ test('track headings align with row content as workspace width changes', async (
         return Math.abs(h.left - r.left) <= 1 && Math.abs(h.right - r.right) <= 1
       })
     })).toBe(true)
+    await expect(page.locator('.browse-count')).toHaveText('3 tracks')
+    if (width >= 800) {
+      const geometry = await page.evaluate(() => {
+        const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect()
+        const art = rect('.collection-hero > .artwork'), title = rect('.collection-heading'), actions = rect('.workspace-actions'), tabs = rect('.browse-tabs'), count = rect('.browse-count')
+        return { titleAtTop: Math.abs(title.top - art.top) < 1, controlsBesideArt: actions.left > art.right && actions.top >= title.bottom, countBesideTabs: count.left > tabs.right && Math.abs(count.top + count.height / 2 - tabs.top - tabs.height / 2) < 1 }
+      })
+      expect(geometry).toEqual({ titleAtTop: true, controlsBesideArt: true, countBesideTabs: true })
+    }
+    const alpha = await page.locator('.track-header').evaluate(element => {
+      const color = getComputedStyle(element).backgroundColor
+      const probe = document.createElement('canvas').getContext('2d')!
+      probe.fillStyle = color; probe.fillRect(0, 0, 1, 1)
+      return probe.getImageData(0, 0, 1, 1).data[3]
+    })
+    expect(alpha).toBeGreaterThan(0); expect(alpha).toBeLessThan(255)
     if (width === 1600 || width === 390) await page.screenshot({ path: `test-results/ui-overhaul-tracks-${width}.png` })
   }
   await page.setViewportSize({ width: 1600, height: 1000 })

@@ -21,6 +21,12 @@ where users make those decisions.
   still requires preview review and confirmation.
 - Track headings and rows share grid columns and a scroll container. Selection
   highlights the entire row, without a separate checkbox column.
+- The collection header places the title, metadata, and playback/save controls
+  beside artwork on desktop, with wrapped controls across the width on mobile.
+  The filtered track count sits beside the view tabs. Desktop selection actions
+  replace the column heading without moving rows during a drag. The sticky
+  heading uses a translucent theme tint, with solid backgrounds for reduced
+  transparency and system colors for high contrast.
 
 ## Controls
 
