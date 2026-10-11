@@ -27,8 +27,9 @@ Meloark combines **melody** and **ark** — a home for your music collection. Pl
 
 | Your music | Your library | Your playlists |
 | --- | --- | --- |
-| **Press play, straight away.**<br />Play supported local audio with seeking, shuffle, repeat, and a persistent player. | **Find your next listen.**<br />Browse albums, artwork, metadata, and folder or artist filters. | **Shape the sequence.**<br />Create or open playlists, reorder tracks together, undo edits, and save or export an M3U8. |
+| **Press play, straight away.**<br />Play supported local audio with seeking, shuffle, repeat, Space to play/pause, and a collapsible player. | **Find your next listen.**<br />Search songs, artists, albums, playlists and libraries from one rich dropdown, without leaving your current view. | **Shape the sequence.**<br />Create or reuse playlists, reorder tracks together, undo edits, and save or export an M3U8. |
 | **Follow the words.**<br />Use local LRC lyrics, seek by line, and optionally look up a recording on LRCLIB. | **Look a little closer.**<br />Inspect codec details, sample rate, and live source bitrate for supported formats. | **Keep control.**<br />Use permission-based folder access or portable file selection, with your audio kept on your device. |
+| **Set the mood.**<br />Soft artwork colors fade across the app, with a toggle to return to the amber theme. | **Make room for music.**<br />Resize or collapse the sidebar, browse virtualized track lists, and use consistent menus and a frosted lyrics panel. | **Keep files in order.**<br />Optionally sync numbered filenames and an M3U8, or remove filename numbers later with a reviewed preview. |
 
 > [!NOTE]
 > **Your collection stays local.** M3U8-only edits leave audio filenames unchanged. Optional filename sync renumbers a complete audio folder; audio files are never deleted. Online lyrics are optional and send recording details to LRCLIB only after you enable lookup.
@@ -37,7 +38,7 @@ Meloark combines **melody** and **ark** — a home for your music collection. Pl
 
 1. **[Open Meloark](https://meloark.markdsilva.com/).** You can also [run it locally](#run-locally). Read the optional **Quick start** document, or explore.
 2. **Add your music.** Choose **Choose a music folder** and select your local collection. Subfolders are included. You can also select files, and play tracks straight away—no playlist needed.
-3. **Create a playlist.** Click **New playlist**, give it a name, keep **Start empty** selected, and choose **Create draft**. Already have an M3U/M3U8? Open it from the sidebar instead.
+3. **Choose how to organize.** A new direct-access folder opens a setup dialog: keep **M3U8 only** for unchanged filenames, or choose optional numbered filenames. Choose an existing M3U8 when offered, or **Browse first** to listen before organizing. For a separate playlist, use **New playlist**, keep **Start empty** selected, and choose **Create draft**.
 4. **Make it yours.** In **All tracks**, use **+** to add songs. Switch to **Playlist** to drag tracks into order; **Undo** is there if you change your mind.
 5. **Keep your playlist.** Use **Save** to write an M3U8 with folder permission, or **Export** to download it. Place an exported file at the library-relative location shown by the app so its song references work.
 
@@ -76,17 +77,29 @@ Playlist menus offer **Remove from app** or **Discard draft**, with confirmation
 
 Use the arrow at the player’s upper edge to collapse it: artwork, track info and essential controls stay visible, and the playlist gains more space. Restore the player for the timeline and detailed audio readout; the size preference survives reopening. In compact mode, More player controls (desktop) or Expand player (phones) keeps seeking and the full controls available. Collapse the desktop sidebar into an icon rail; its preference survives reopening. Below 768 px, navigation opens in a modal drawer. On phones, expand the compact player for the complete transport, volume, and audio details. Player sheets do not replace the native audio element or restart playback. Use **Select tracks** for touch selection, then enable **Reorder tracks** and hold a row briefly before dragging. Turn reordering off to scroll normally. Track actions offer explicit Add and Add & Play for ordinary playlists.
 
-### Filename order sync (test branch)
+### Your workspace
+
+**Artwork backgrounds** is on by default. Colors are sampled locally from the playing track's album art and fade gently across the workspace, navigation, player and lyrics. The palette button beside the playlist controls turns this off and restores the amber background; your choice is remembered. Missing artwork also uses the amber theme. Text and control accents stay consistent, and reduced-motion preferences are respected.
+
+Drag the desktop sidebar's right edge to resize it, or collapse it into an icon rail. Use the arrow at the player's upper edge to reclaim playlist space while keeping artwork, track details and essential controls visible. Sidebar size and player size are remembered. The track list scrolls independently on roomy desktop screens; compact screens keep setup and recovery controls reachable.
+
+Quick start replaces the moving tour with a stable guide. Menus, dialogs and selective icon tooltips share a consistent design. If music-folder access expires, a clear recovery dialog helps you restore it while keeping your drafts.
+
+### Filename order sync
 
 New playlist offers **M3U8 only** (the default), **Numbered filenames only**, and **Numbered filenames + M3U8**. Filename modes require a direct-access folder, Web Locks and a successful disposable native rename test. Choose one complete audio folder and review the initial order; combined mode can instead use a fully resolved existing M3U8 as its order authority. Subsets, duplicate occurrences and multi-folder playlists remain ordinary playlists.
+
+An existing M3U8 does not need to share the folder's name. Setup discovers compatible playlists and lets you choose the saved playlist order or filename order when they differ. Combined mode uses that choice for both the numbered filenames and its dedicated M3U8. Other playlists retain their own sequence while their references follow renamed files. Later external order changes require review before sync resumes.
 
 Dragging, Undo and Redo automatically queue filename changes such as `01 - Song.mp3`. Existing titles/extensions remain intact. Matching `.lrc` sidecars follow their audio files. Accessible `.m3u`/`.m3u8` references are repaired while preserving comments, encodings, duplicate occurrences and playlist order. References outside the granted library cannot be repaired.
 
 Sync uses native in-folder moves with temporary names, checked writes, browser-cache recovery data and `.meloark-order-sync.json` on disk. An interrupted batch stops further writes until recovery. It never implements renaming by copying and deleting audio. External applications must not edit the folder during a batch; the browser API cannot provide a transaction across audio renames and playlist writes.
 
-Disk changes wait until playback is stopped, including paused playback, to protect the current browser file snapshot. **Stop & sync** releases it. Sync settings can pause, retry or disable sync. Playlist membership controls are disabled while filename sync owns the complete folder. Normal M3U8 drafts and portable Export remain available.
+Tracks up to 128 MiB use a playback snapshot so filename sync can continue while they play. Larger disk-backed tracks must be stopped, including paused tracks, before filenames change; **Stop & sync** releases that snapshot. Sync settings can pause, retry or disable sync. Playlist membership controls are disabled while filename sync owns the complete folder. Normal M3U8 drafts and portable Export remain available.
 
-See [Windows test instructions](docs/BROWSER_ORDER_SYNC_TESTING.md) before using this branch with copied music.
+Want unnumbered filenames again? Choose **Remove filename numbers…** from **Sync settings** or the library's actions menu. Review the proposed audio and lyric filenames and confirm. Collisions block the operation; playlist references are repaired without changing playlist order, and filename sync for that folder is disabled. Filename-only order becomes an M3U8 draft that you can Save or Export.
+
+See [folder-sync testing and recovery](docs/BROWSER_ORDER_SYNC_TESTING.md) for disposable-folder checks, browser requirements and Windows validation.
 
 ### Synchronized lyrics
 
@@ -110,12 +123,13 @@ LRC inspection is bounded to 512 KiB and 10,000 lines. Multiple timestamps, frac
 | Native supported audio playback | Yes | Yes |
 | Editing, history, playlist creation | Yes | Yes |
 | Updating the original M3U8 | With write permission | Download/export instead |
+| Filename numbering and number removal | With write permission, Web Locks and verified native rename support | Unavailable; M3U8 editing/export remains available |
 | Reopening music after reload | Remembered handle, subject to renewed permission | Reselect the folder/files |
 | Draft recovery | IndexedDB where available | IndexedDB where available |
 
 Feature detection determines what is offered. Chromium-based desktop browsers are recommended for full folder access. Firefox and Safari retain portable workflows. Actual codec support varies by browser and operating system; unsupported tracks remain visible and in the playlist. There is no decoder/transcoder fallback.
 
-The app requires an explicit selection and never discovers your system Music folder automatically. It does not rename, delete, copy, or write audio files. It does not fetch URL entries, external artwork or fonts. LRCLIB requests occur only after you enable online lyrics. Forgetting a library removes browser records only.
+The app requires an explicit selection and never discovers your system Music folder automatically. Ordinary playlist edits leave audio files unchanged. Reviewed filename sync and number removal use native renames without rewriting audio bytes; audio files are never deleted or copied. The app does not fetch URL entries, external artwork or fonts. LRCLIB requests occur only after you enable online lyrics. Forgetting a library removes browser records only.
 
 ### Playlists and ordering
 
@@ -124,9 +138,9 @@ The app requires an explicit selection and never discovers your system Music fol
 - Paths are relative to the playlist directory. Safe parent references inside the chosen library are allowed. Absolute paths, remote URLs, missing tracks, separator ambiguity, and case-only mismatches require explicit local mapping or removal.
 - Existing M3U8 preserves BOM and newline style. New documents use UTF-8 without BOM and LF. Downloaded files must be placed at the location shown by Meloark, otherwise relative references will not resolve.
 - HLS manifests are rejected. Unknown extended directives require a reviewed normalized copy; the original is preserved. Inspection limits are 16 MiB and 100,000 lines.
-- Numbered filenames such as `001 - Song.mp3` provide a reviewed starting order. Indexes are folder-local. Duplicate indexes, partial indexing, invalid indexes, gaps, and multiple folders are displayed for review. Creating a draft from filename order requires an explicit review acknowledgement. Files are never renumbered.
+- Numbered filenames such as `001 - Song.mp3` provide a reviewed starting order. Indexes are folder-local. Duplicate indexes, partial indexing, invalid indexes, gaps, and multiple folders are displayed for review. Importing filename order into an ordinary M3U8 draft leaves filenames unchanged; optional filename sync maintains numbered files after setup.
 
-Once established, playlist order is authoritative. Filename indexing never becomes an ongoing synchronization mode.
+Ordinary M3U8 playlists keep their own order independently of filenames. In combined sync mode, the reviewed playlist owns both its sequence and the folder's numbering; other playlists retain independent sequences. Disable sync to return to ordinary playlist editing, or remove the numbers when you want unnumbered files.
 
 </details>
 
@@ -183,6 +197,8 @@ npm.cmd run test:e2e -- --project=chromium tests/e2e/local-library.spec.ts
 
 Browser tests start an isolated server on port 5174, overrideable with `MELOARK_TEST_PORT`. Run them outside restrictive command sandboxes when Firefox fails before page creation; no Firefox security preferences need changing. Generated PCM and structural encoded-packet fixtures cover CI. Structural packet fixtures test demuxing and timing, not codec decoding. Live worker tests cover cancellation, stale responses, hidden/paused behavior, and watchdog failure. Browser checks cover 320/390/768/1024/1440 px, landscape, a 200%-zoom-equivalent viewport, and Chromium touch events.
 
+GitHub runs **Meloark browser checks** on `main`, the feature branches, and pull requests targeting `main`. It validates lint, types, unit tests, builds, browser flows, production assets, and native filename sync in disposable Linux folders. CodeQL also analyzes pushes and pull requests for `main`.
+
 ### Manual release checks
 
 - Windows, macOS, Linux Chromium: choose a real temporary library, reopen a remembered handle, deny/renew permission, save new/existing playlists, revoke access, and check actual disk bytes.
@@ -218,7 +234,7 @@ For the new deployment, create a Worker named **`meloark`** and connect **[markd
 | Static output | `dist/`, already configured in Wrangler |
 | Build/runtime environment variables | None required; `.nvmrc` supplies Node 24 |
 
-Workers Builds supplies deployment authentication through its GitHub integration; do not add Cloudflare tokens or account IDs to the repository. Keep development dependencies available when installing: Vite, TypeScript and Wrangler are build tools. Cloudflare runs its build separately from GitHub checks, so protect `main` with the existing Web checks and CodeQL workflows before merging.
+Workers Builds supplies deployment authentication through its GitHub integration; do not add Cloudflare tokens or account IDs to the repository. Keep development dependencies available when installing: Vite, TypeScript and Wrangler are build tools. Cloudflare runs its build separately from GitHub checks, so use the Meloark browser checks and CodeQL workflows as required checks when protecting `main`.
 
 When you are ready, deploy the fresh Worker, then add **your own hostname as a Custom Domain** on the `meloark` Worker in Cloudflare. Domain/route management is intentionally left in the dashboard; the configuration contains no route or DNS changes. See [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/) and [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
 

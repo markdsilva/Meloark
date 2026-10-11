@@ -1,8 +1,10 @@
-name: Feature branch browser checks
+name: Meloark browser checks
 
 on:
   push:
-    branches: [feat/browser-order-sync, feat/ui-overhaul]
+    branches: [main, feat/browser-order-sync, feat/ui-overhaul]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -10,7 +12,6 @@ permissions:
 
 jobs:
   browser-checks:
-    if: github.ref == 'refs/heads/feat/browser-order-sync' || github.ref == 'refs/heads/feat/ui-overhaul'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
