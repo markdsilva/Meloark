@@ -24,6 +24,21 @@
 .selection-toolbar.floating { position: absolute; top: 0; left: 0; right: 0; z-index: 3; min-height: 42px; padding: 0 10px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .track-list:has(> .selection-toolbar.floating) .track-header { opacity: 0; }
 .track-scroll { overflow: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; height: clamp(260px, calc(100dvh - 470px), 700px); min-height: 260px; scroll-padding-top: 42px; }
+/* Use the space left by the actual header and banners, rather than estimating
+   it from viewport height. Compact screens retain a scrollable workspace so
+   setup guidance, filters and recovery actions always remain reachable. */
+@media (min-width: 768px) and (min-height: 650px) {
+  .main { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .main > :not(.workspace, .welcome) { flex-shrink: 0; }
+  .workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
+  .workspace > :not(#browse-panel, .album-grid) { flex-shrink: 0; }
+  #browse-panel { display: flex; flex-direction: column; flex: 1; min-height: 128px; }
+  #browse-panel > .track-list, .track-list > [role=grid] { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  #browse-panel .track-scroll { flex: 1; height: auto; min-height: 0; overscroll-behavior: contain; }
+  .workspace > .album-grid { flex: 1; min-height: 0; overflow: auto; align-content: start; }
+  .main > .welcome { min-height: 0; overflow: auto; }
+  .workspace-footnote { padding-top: 12px; }
+}
 @container (max-width: 950px) {
   .track-list { --track-columns: 44px minmax(100px, 1fr) 130px 48px 68px; }
   .track-album, .track-header > span:nth-child(3) { display: none; }

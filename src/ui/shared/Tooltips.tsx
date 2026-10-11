@@ -1,28 +1,33 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-// Delegated hints cover virtualized controls as well as controls inside native dialogs.
+// Keep accessible names on all controls, but only show visual hints for icon
+// buttons and explicitly requested explanations (including disabled controls).
 export function Tooltips() {
   const [target, setTarget] = useState<HTMLElement>()
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
     let focusTarget: HTMLElement | undefined
+    let keyboardInteraction = true
     const show = (event: Event) => {
-      const element = (event.target as HTMLElement).closest<HTMLElement>('[data-tooltip], button[aria-label]')
+      const origin = event.target instanceof Element ? event.target : null
+      const element = origin?.closest<HTMLElement>('[data-tooltip]') ?? origin?.closest<HTMLElement>('button.icon-button[aria-label]:not([title]), button.hero-play[aria-label], button.play-button[aria-label]')
       if (event.type === 'focusin') focusTarget = element ?? undefined
       // A stationary pointer can cross controls during responsive layout. It
       // must not replace the hint belonging to keyboard focus.
-      if (event.type === 'pointerover' && focusTarget?.matches(':focus-visible') && document.activeElement === focusTarget) return
+      if (event.type === 'pointerover' && keyboardInteraction && focusTarget?.matches(':focus-visible') && document.activeElement === focusTarget) return
       clearTimeout(timer); setTarget(undefined)
       if (element) timer = setTimeout(() => setTarget(element), event.type === 'focusin' ? 100 : 500)
     }
     const hide = (event?: Event) => {
-      if (event?.type === 'pointerout' && focusTarget?.matches(':focus-visible') && document.activeElement === focusTarget) return
+      if (event?.type === 'keydown') keyboardInteraction = true
+      if (event?.type === 'pointerdown') keyboardInteraction = false
+      if (event?.type === 'pointerout' && keyboardInteraction && focusTarget?.matches(':focus-visible') && document.activeElement === focusTarget) return
       clearTimeout(timer); setTarget(undefined)
       if (event?.type === 'focusout') focusTarget = undefined
       // Focusing an offscreen control scrolls it into view. Show the focused
       // hint after that scroll, at its new position, rather than cancelling it.
-      if (event?.type === 'scroll' && focusTarget && document.activeElement === focusTarget) {
+      if (event?.type === 'scroll' && keyboardInteraction && focusTarget && document.activeElement === focusTarget) {
         const element = focusTarget
         timer = setTimeout(() => setTarget(element), 100)
       }
@@ -38,5 +43,5 @@ export function Tooltips() {
   }, [])
   if (!target?.isConnected) return null
   const rect = target.getBoundingClientRect()
-  return createPortal(<div className="tooltip" role="tooltip" style={{ left: Math.max(8, Math.min(rect.left, innerWidth - 268)), top: rect.bottom + 8 > innerHeight - 65 ? Math.max(8, rect.top - 64) : rect.bottom + 8 }}>{target.dataset.tooltip ?? target.getAttribute('title') ?? target.getAttribute('aria-label')}</div>, target.closest('dialog') ?? document.body)
+  return createPortal(<div className="tooltip" role="tooltip" style={{ left: Math.max(8, Math.min(rect.left, innerWidth - 268)), top: rect.bottom + 8 > innerHeight - 65 ? Math.max(8, rect.top - 64) : rect.bottom + 8 }}>{target.dataset.tooltip ?? target.getAttribute('aria-label')}</div>, target.closest('dialog') ?? document.body)
 }

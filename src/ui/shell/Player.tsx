@@ -16,13 +16,13 @@ import { AmbientBackground } from './AmbientBackground'
 function Volume() {
   const volume = usePlayer(s => s.volume), muted = usePlayer(s => s.muted)
   const [capabilities] = useState(detectCapabilities)
-  return <div className="volume"><button className={`icon-button toggle-button ${muted ? 'active' : ''}`} aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={muted} title={muted ? 'Unmute' : 'Mute'} onClick={() => player.mute()}>{muted ? <VolumeX size={20} /> : <Volume2 size={20} />}</button>
+  return <div className="volume"><button className={`icon-button toggle-button ${muted ? 'active' : ''}`} aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={muted} onClick={() => player.mute()}>{muted ? <VolumeX size={20} /> : <Volume2 size={20} />}</button>
     {capabilities.volumeControl ? <input className="player-range volume-range" style={{ '--range-fill': `${volume * 100}%` } as CSSProperties} aria-label="Volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={event => player.setVolume(Number(event.target.value))} /> : <small>Use your device’s volume controls</small>}</div>
 }
 export function Toggles() {
   const shuffle = usePlayer(s => s.shuffle), repeat = usePlayer(s => s.repeat)
-  return <><button className={`icon-button toggle-button ${shuffle ? 'active' : ''}`} aria-label="Shuffle" aria-pressed={shuffle} title={`Shuffle ${shuffle ? 'on' : 'off'}`} onClick={() => player.shuffle()}><Shuffle size={20} /></button>
-    <button className={`icon-button toggle-button ${repeat !== 'off' ? 'active' : ''}`} aria-label={`Repeat: ${repeat}`} aria-pressed={repeat !== 'off'} title={`Repeat ${repeat}`} onClick={() => player.repeat()}>{repeat === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}</button></>
+  return <><button className={`icon-button toggle-button ${shuffle ? 'active' : ''}`} aria-label="Shuffle" aria-pressed={shuffle} data-tooltip={`Shuffle ${shuffle ? 'on' : 'off'}`} onClick={() => player.shuffle()}><Shuffle size={20} /></button>
+    <button className={`icon-button toggle-button ${repeat !== 'off' ? 'active' : ''}`} aria-label={`Repeat: ${repeat}`} aria-pressed={repeat !== 'off'} data-tooltip={`Repeat ${repeat}`} onClick={() => player.repeat()}>{repeat === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}</button></>
 }
 export function Transport({ previous = true }: { previous?: boolean }) {
   const current = usePlayer(s => s.current), playing = usePlayer(s => s.playing), loading = usePlayer(s => s.loading)

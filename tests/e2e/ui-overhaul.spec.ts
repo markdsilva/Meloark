@@ -16,7 +16,76 @@ async function library(page: import('@playwright/test').Page) {
   await expect(page.locator('.track-title strong')).toHaveText(['Alpha', 'Beta', 'Charlie'])
 }
 
+test('visible navigation labels stay quiet while icon hints have one tooltip', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 }); await library(page)
+  for (const name of ['All tracks', 'Albums', 'Active playlist', 'Mix.m3u8']) {
+    const button = page.locator('.sidebar-expanded').getByRole('button', { name, exact: true })
+    await expect(button).not.toHaveAttribute('title')
+    await button.hover(); await page.waitForTimeout(650)
+    await expect(page.getByRole('tooltip')).toHaveCount(0)
+  }
+  const storage = page.getByRole('button', { name: 'Remember libraries', exact: true })
+  await storage.hover()
+  await expect(page.getByRole('tooltip')).toHaveText('Request persistent browser storage')
+  await expect(page.getByRole('tooltip')).toHaveCount(1)
+  await expect(storage).not.toHaveAttribute('title')
+  await storage.click(); await expect(page.getByRole('tooltip')).toHaveCount(0)
+  await trackRow(page, 'Beta').click(); await page.keyboard.press('Alt+ArrowUp')
+  const draft = page.locator('.sidebar-expanded .playlist-row .draft-dot')
+  await draft.hover()
+  await expect(page.getByRole('tooltip')).toHaveText('Unsaved draft')
+  await expect(draft).not.toHaveAttribute('title')
+  await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
+  await page.locator('.app').evaluate(async element => { await Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))) })
+  await page.locator('.sidebar-rail').getByRole('button', { name: 'All tracks', exact: true }).hover()
+  await expect(page.getByRole('tooltip')).toHaveText('All tracks')
+})
+
+test('desktop workspace stays fixed while tracks scroll and filters use the available space', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  const names = Array.from({ length: 40 }, (_, i) => `Track ${String(i + 1).padStart(2, '0')}`)
+  await page.getByLabel('Select library files', { exact: true }).setInputFiles([
+    ...names.map(name => ({ name: `${name}.wav`, mimeType: 'audio/wav', buffer: Buffer.from(taggedWav(.1, { title: name, artist: 'Test artist', album: 'Test album' })) })),
+    { name: 'Mix.m3u8', mimeType: 'audio/x-mpegurl', buffer: Buffer.from(`#EXTM3U\n${names.map(name => `${name}.wav`).join('\n')}\n`) },
+  ])
+  await page.getByRole('button', { name: 'Mix.m3u8', exact: true }).click()
+  await expect(page.locator('.browse-count')).toHaveText('40 tracks')
+  const scroll = page.locator('.track-scroll')
+  const fixed = async () => {
+    for (const selector of ['.main', '.workspace']) {
+      expect(await page.locator(selector).evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1)
+      expect(await page.locator(selector).evaluate(element => element.scrollTop)).toBe(0)
+    }
+  }
+  const heroTop = (await page.locator('.collection-hero').boundingBox())!.y
+  await scroll.hover(); await page.mouse.wheel(0, 1800)
+  await expect.poll(() => scroll.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+  await fixed()
+  expect((await page.locator('.collection-hero').boundingBox())!.y).toBe(heroTop)
+  await scroll.evaluate(element => { element.scrollTop = element.scrollHeight })
+  await expect(page.locator('.track-title strong').filter({ hasText: 'Track 40' })).toBeVisible()
+  await page.getByRole('button', { name: 'Track filters', exact: true }).click()
+  await fixed()
+  await page.getByRole('button', { name: 'Lyrics', exact: true }).click()
+  await fixed()
+  await page.getByRole('button', { name: 'Close lyrics', exact: true }).click()
+  await page.getByRole('button', { name: 'Track filters', exact: true }).click()
+  await page.getByRole('button', { name: 'All tracks', exact: true }).click(); await fixed()
+  await page.getByRole('button', { name: 'Albums', exact: true }).click(); await fixed()
+  await expect(page.locator('.album-grid')).toBeVisible()
+  await page.getByRole('button', { name: 'Active playlist', exact: true }).click()
+  await page.setViewportSize({ width: 1024, height: 650 }); await fixed()
+  await expect(scroll).toBeVisible()
+  await page.setViewportSize({ width: 1024, height: 450 })
+  await page.getByRole('button', { name: 'Export', exact: true }).scrollIntoViewIfNeeded()
+  await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeInViewport()
+})
+
 test('row selection supports modifiers, Space and ranges without starting playback', async ({ page }) => {
+  // Keep all fixture rows in view so ordinary scroll-to-click is distinct
+  // from a selection toolbar changing the row layout.
+  await page.setViewportSize({ width: 1440, height: 900 })
   await library(page)
   await expect(page.getByRole('checkbox')).toHaveCount(0)
   const a = trackRow(page, 'Alpha'), b = trackRow(page, 'Beta'), c = trackRow(page, 'Charlie')
