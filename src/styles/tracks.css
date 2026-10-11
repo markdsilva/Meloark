@@ -23,7 +23,7 @@
 /* Selection actions replace the heading without moving rows during a drag. */
 .selection-toolbar.floating { position: absolute; top: 0; left: 0; right: 0; z-index: 3; min-height: 42px; padding: 0 10px; background: color-mix(in srgb, var(--surface) 30%, transparent); backdrop-filter: blur(12px) brightness(.88); border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent); }
 .track-list:has(> .selection-toolbar.floating) .track-header { opacity: 0; }
-.track-scroll { overflow: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; height: clamp(260px, calc(100dvh - 470px), 700px); min-height: 260px; scroll-padding-top: 42px; }
+.track-scroll { overflow: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; height: clamp(260px, calc(100dvh - 470px + var(--player-space-gain, 0px)), 700px); min-height: 260px; scroll-padding-top: 42px; }
 /* Use the space left by the actual header and banners, rather than estimating
    it from viewport height. Compact screens retain a scrollable workspace so
    setup guidance, filters and recovery actions always remain reachable. */
@@ -56,7 +56,7 @@
   .track-row.selecting .row-leading .row-play { display: inline-flex; }
   .track-title .artwork { display: none; }
   .track-title { gap: 6px; }
-  .track-scroll { height: max(258px, calc(100dvh - 390px)); min-height: 258px; }
+  .track-scroll { height: max(258px, calc(100dvh - 390px + var(--player-space-gain, 0px))); min-height: 258px; }
 }
 @media (prefers-reduced-transparency: reduce) {
   .track-header, .selection-toolbar.floating { background: var(--surface); backdrop-filter: none; }

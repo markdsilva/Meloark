@@ -17,14 +17,19 @@ export function Menu({ anchor, items, close, label = 'Actions' }: { anchor: Menu
   useLayoutEffect(() => {
     const rect = ref.current!.getBoundingClientRect()
     setPosition({ left: Math.max(8, Math.min(anchor.x, innerWidth - rect.width - 8)), top: Math.max(8, Math.min(anchor.y, innerHeight - rect.height - 8)) })
-    ref.current?.querySelector<HTMLButtonElement>('button')?.focus()
+    ref.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
   }, [anchor])
   useEffect(() => {
+    const openerRect = anchor.opener.getBoundingClientRect()
     const dismiss = (event: Event) => { if (!ref.current?.contains(event.target as Node)) { restoreFocus.current = false; closeRef.current() } }
     const scroll = (event: Event) => {
-      // Only scrolling an ancestor moves the anchor. Independent panels and the
-      // menu itself may scroll without invalidating its position.
-      if (event.target === document || event.target instanceof Element && event.target.contains(anchor.opener)) closeRef.current()
+      // Focus/scroll-to-click can queue an event before this menu opens. Only
+      // dismiss when its anchor actually moves after opening; other panels
+      // and scrolling inside the menu leave its position valid.
+      if (event.target === document || event.target instanceof Element && event.target.contains(anchor.opener)) {
+        const current = anchor.opener.getBoundingClientRect()
+        if (current.top !== openerRect.top || current.left !== openerRect.left) closeRef.current()
+      }
     }
     const resize = () => closeRef.current()
     document.addEventListener('pointerdown', dismiss)

@@ -23,11 +23,12 @@ const sensors = [PointerSensor.configure({
 })]
 function TrackRow({ row, index, selected, reorderable, selecting, touchReorder, suppressClick, onSelect, onResolve, onDetails, onPlay, onMenu }: {
   row: RowData; index: number; selected: boolean; reorderable: boolean
-  onSelect: (event: MouseEvent | KeyboardEvent, index: number) => void; onResolve: (entry: PlaylistEntry) => void
+  onSelect: (event: MouseEvent | KeyboardEvent, index: number) => boolean | void; onResolve: (entry: PlaylistEntry) => void
   selecting: boolean; onDetails: (track: Track) => void
   touchReorder: boolean; suppressClick: () => boolean
   onPlay: (row: RowData) => void; onMenu: (row: RowData, anchor: MenuAnchor) => void
 }) {
+  const [pointerCleared, setPointerCleared] = useState(false)
   const track = useApp(s => {
     const library = s.libraries.find(l => l.id === s.activeLibrary)
     return row.trackId ? library?.tracks[row.trackId] : undefined
@@ -50,13 +51,15 @@ function TrackRow({ row, index, selected, reorderable, selecting, touchReorder, 
   }
   return <div ref={element => { drag.ref(reorderable ? element : null); drop.ref(reorderable ? element : null) }} role="row" aria-label={`Track ${index + 1}: ${title}`} aria-rowindex={index + 2} aria-selected={selected} tabIndex={0}
     data-touch-reorder={touchReorder} aria-description={reorderable ? 'Drag this row to reorder. Alt+Arrow up or down also moves selected tracks.' : undefined}
-    className={`track-row ${reorderable ? 'reorderable' : ''} ${touchReorder ? 'touch-reorder' : ''} ${selecting ? 'selecting' : ''} ${selected ? 'selected' : ''} ${isCurrent ? 'current' : ''} ${drag.isDragSource ? 'dragging' : ''} ${drop.isDropTarget ? 'drop-target' : ''}`}
+    className={`track-row ${reorderable ? 'reorderable' : ''} ${touchReorder ? 'touch-reorder' : ''} ${selecting ? 'selecting' : ''} ${selected ? 'selected' : ''} ${pointerCleared ? 'pointer-cleared' : ''} ${isCurrent ? 'current' : ''} ${drag.isDragSource ? 'dragging' : ''} ${drop.isDropTarget ? 'drop-target' : ''}`}
+    onPointerLeave={() => setPointerCleared(false)} onBlur={() => setPointerCleared(false)}
     onContextMenu={event => { event.preventDefault(); onMenu(row, menuAnchor(event.currentTarget, event.clientX, event.clientY)) }}
-    onClick={event => { if (!suppressClick()) onSelect(event, index) }} onDoubleClick={event => { if (!(event.target instanceof Element && event.target.closest('button, a, input')) && !suppressClick()) activate() }} onKeyDown={event => {
+    onClick={event => { if (!suppressClick()) setPointerCleared(onSelect(event, index) === true) }} onDoubleClick={event => { if (!(event.target instanceof Element && event.target.closest('button, a, input')) && !suppressClick()) activate() }} onKeyDown={event => {
+      setPointerCleared(false)
       if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); event.stopPropagation(); onMenu(row, menuAnchor(event.currentTarget)); return }
       if (event.target !== event.currentTarget) return
       if (event.key === 'Enter') { event.preventDefault(); activate() }
-      if (event.key === ' ') { event.preventDefault(); onSelect(event, index) }
+      if (event.key === ' ' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); onSelect(event, index) }
     }}>
     <div role="gridcell" className="row-leading">
       <span className={`row-number ${isCurrent ? 'active' : ''}`}>{isCurrent && playing ? <span className="equalizer"><i /><i /><i /></span> : index + 1}</span>
@@ -145,9 +148,11 @@ export function TrackList({ query, folder, artist, sortBy, playlist, countHost }
     } else if (event.ctrlKey || event.metaKey || (mobile && selecting) || ('key' in event && event.key === ' ')) {
       const next = new Set(validSelected); if (next.has(row.id)) next.delete(row.id); else next.add(row.id)
       setSelected(next); anchor.current = index
+      return !next.has(row.id)
     } else {
       const clearSingleSelection = !('key' in event) && validSelected.size === 1 && validSelected.has(row.id)
       setSelected(clearSingleSelection ? new Set() : new Set([row.id])); anchor.current = index
+      return clearSingleSelection
     }
   }
   function move(offset: number) {

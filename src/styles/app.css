@@ -367,7 +367,7 @@ input[type=range] { height: 28px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 
 /* Shared controls: visual geometry stays compact; touch hit targets stay generous. */
-.app { --sidebar-expanded-width: clamp(220px, var(--sidebar-preferred-width, 240px), min(360px, calc(100vw - 480px))); transition: grid-template-columns var(--navigation-motion); }
+.app { --sidebar-expanded-width: clamp(220px, var(--sidebar-preferred-width, 240px), min(360px, calc(100vw - 480px))); transition: grid-template-columns var(--navigation-motion), grid-template-rows 320ms cubic-bezier(.22, 1, .36, 1); }
 .sidebar-shell { position: relative; grid-column: 1; grid-row: 1; overflow: hidden; min-height: 0; background: var(--sidebar); border-right: 1px solid var(--border); }
 .sidebar-expanded { height: 100%; width: var(--sidebar-expanded-width); opacity: 1; transform: translateX(0); visibility: visible; transition: opacity 140ms ease 60ms, transform var(--navigation-motion), visibility 0s; }
 .sidebar-expanded > .sidebar { height: 100%; border-right: 0; overflow-x: hidden; }
@@ -487,4 +487,19 @@ input.player-range:active:not(:disabled) { --range-accent: var(--accent-hover); 
 }
 @media (prefers-reduced-motion: reduce) {
   :is(.button, .icon-button, .play-button, .text-button):active:not(:disabled), .source-pill:active { scale: 1; }
+}
+
+/* Compact playback keeps the queue and transport mounted while returning
+   space to the workspace. The handle stays at the player's upper edge. */
+.app { --player-height: 112px; --player-space-gain: 0px; grid-template-rows: minmax(0, 1fr) var(--player-height); }
+.app.player-collapsed { --player-height: 72px; --player-space-gain: 40px; }
+.player-size-toggle { position: absolute; top: -14px; left: 50%; translate: -50% 0; width: 44px; height: 28px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); background: color-mix(in srgb, var(--surface) 85%, transparent); backdrop-filter: blur(12px); z-index: 1; }
+.player-size-toggle:hover:not(:disabled) { color: var(--accent-text); background: var(--control-on-hover); }
+.player-collapsed .player { padding-block: 8px; }
+.player-collapsed .now-playing .artwork { width: 40px; height: 40px; }
+@media (max-width: 767px) {
+  .app, .app.collapsed { grid-template-rows: minmax(0, 1fr) calc(var(--player-height) + env(safe-area-inset-bottom)); transition: grid-template-rows 320ms cubic-bezier(.22, 1, .36, 1); }
+  .player-size-toggle { top: -22px; height: 44px; }
+  .player-collapsed .player.player-mobile { padding-block: 8px calc(8px + env(safe-area-inset-bottom)); }
+  .player-collapsed .player-mobile .now-playing .artwork { width: 32px; height: 32px; }
 }

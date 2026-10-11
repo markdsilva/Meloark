@@ -44,7 +44,7 @@ test('transport and filter toggles retain distinct state on hover and keyboard f
   await shuffle.hover(); const off = await surface(page, 'Shuffle')
   await shuffle.click(); await expect(shuffle).toHaveAttribute('aria-pressed', 'true')
   await expect.poll(() => surface(page, 'Shuffle')).not.toEqual(off)
-  await shuffle.focus(); await page.keyboard.press('Space'); await expect(shuffle).toHaveAttribute('aria-pressed', 'false')
+  await shuffle.focus(); await page.keyboard.press('Enter'); await expect(shuffle).toHaveAttribute('aria-pressed', 'false')
   await page.getByRole('button', { name: 'Repeat: off', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Repeat: all', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('button', { name: 'Repeat: all', exact: true }).click()

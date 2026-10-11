@@ -150,7 +150,7 @@ test('source badge and button feedback preserve focus and active states', async 
   await expect(shuffle).toHaveCSS('scale', '0.94')
   await page.mouse.up(); await expect(shuffle).toHaveAttribute('aria-pressed', 'true')
   await expect(shuffle).toHaveCSS('scale', 'none')
-  await shuffle.focus(); await page.keyboard.press('Space'); await expect(shuffle).toHaveAttribute('aria-pressed', 'false')
+  await shuffle.focus(); await page.keyboard.press('Enter'); await expect(shuffle).toHaveAttribute('aria-pressed', 'false')
   await expect(shuffle).toBeFocused()
   await page.screenshot({ path: `test-results/sidebar-motion-desktop-${info.project.name}.png`, fullPage: true })
   await page.emulateMedia({ reducedMotion: 'reduce' }); await shuffle.hover(); await page.mouse.down()

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ArrowRight, Check, ChevronRight, Disc3, Download, FileMusic, FolderOpen, HardDrive, HelpCircle, LibraryBig, ListMusic, LoaderCircle, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Undo2, Redo2, X } from 'lucide-react'
-import { bootstrap, cancelScan, createNormalizedCopy, exportPlaylist, forgetLibrary, history, loadPlaylist, notify, openDirectory, openPortable, persistNow, reconcileSource, savePlaylist, scanLibrary, selectLibrary, selectView, useApp } from '../../app/store'
+import { bootstrap, cancelScan, createNormalizedCopy, exportPlaylist, forgetLibrary, history, loadPlaylist, notify, openDirectory, openPortable, persistNow, reconcileSource, savePlaylist, scanLibrary, selectLibrary, selectView, togglePlayback, useApp } from '../../app/store'
 import { isDirty, naturalCompare } from '../../domain/models'
 import { detectCapabilities } from '../../platform/capabilities/detect'
 import { EncodingError } from '../../playlists/codec'
@@ -48,6 +48,8 @@ export function App() {
   const [sortAnchor, setSortAnchor] = useState<MenuAnchor>()
   const mobile = useMediaQuery('(max-width: 767px)')
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('trackindex-sidebar') === 'collapsed' } catch { return false } })
+  const [compactPlayer, setCompactPlayer] = useState(() => { try { return localStorage.getItem('meloark-compact-player') === 'true' } catch { return false } })
+  function toggleCompactPlayer() { setCompactPlayer(value => { try { localStorage.setItem('meloark-compact-player', String(!value)) } catch { /* Keep the preference for this session. */ } return !value }) }
   const shell = useRef<HTMLDivElement>(null)
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth)
   const [picker, setPicker] = useState(false)
@@ -58,6 +60,19 @@ export function App() {
   const folderInput = useRef<HTMLInputElement>(null), fileInput = useRef<HTMLInputElement>(null)
   const playerTrack = usePlayer(s => s.track)
   useEffect(() => { void bootstrap() }, [])
+  useEffect(() => {
+    const playbackKey = (event: globalThis.KeyboardEvent) => {
+      if (event.code !== 'Space' || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.isComposing || event.defaultPrevented) return
+      // Typing and modal workflows keep their native keyboard behavior. Range
+      // controls can still use arrows; Space controls playback from the player.
+      const target = event.target
+      if (document.querySelector('dialog[open], [role="menu"]') || target instanceof HTMLElement && (target.isContentEditable || target.closest('textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"], input:not([type="range"]):not([type="button"]):not([type="submit"])'))) return
+      event.preventDefault(); event.stopPropagation()
+      if (!event.repeat) togglePlayback()
+    }
+    document.addEventListener('keydown', playbackKey, true)
+    return () => document.removeEventListener('keydown', playbackKey, true)
+  }, [])
   useEffect(() => {
     const unload = (event: BeforeUnloadEvent) => {
       if (useApp.getState().libraries.some(library => Object.values(library.sessions).some(isDirty))) { event.preventDefault(); event.returnValue = '' }
@@ -123,7 +138,7 @@ export function App() {
       </div>
       <div className="sidebar-bottom"><button className="nav-item" aria-label="Browser capabilities" onClick={() => { setSidebar(false); setPicker(false); setHelp(true) }}><HelpCircle size={17} />Help & browser support</button></div>
     </aside>)
-  return <div ref={shell} style={{ '--sidebar-preferred-width': `${sidebarWidth}px` } as CSSProperties} className={`app ${collapsed && !mobile ? 'collapsed' : ''} ${lyricsOpen ? 'lyrics-open' : ''}`}>
+  return <div ref={shell} style={{ '--sidebar-preferred-width': `${sidebarWidth}px` } as CSSProperties} className={`app ${collapsed && !mobile ? 'collapsed' : ''} ${lyricsOpen ? 'lyrics-open' : ''} ${compactPlayer ? 'player-collapsed' : ''}`}>
     <AmbientController />
     <AccessController />
     <input ref={element => { folderInput.current = element; if (element && capabilities.directoryInput) element.setAttribute('webkitdirectory', '') }} type="file" multiple className="sr-only" aria-label="Select library folder" onChange={event => { const files = Array.from(event.target.files ?? []); if (files.length) void openPortable(files, event.target.dataset.reconnect || undefined) }} />
@@ -180,7 +195,7 @@ export function App() {
       {!state.ready && <div className="startup-status"><LoaderCircle className="spin" size={15} />Restoring workspace…</div>}
     </main>
     {lyricsOpen && <Suspense fallback={null}><LyricsPanel /></Suspense>}
-    <Player />
+    <Player compact={compactPlayer} toggleCompact={toggleCompactPlayer} />
     <AccessRecovery requested={recoveryRequest} handled={() => setRecoveryRequest(undefined)} chooseFolder={chooseFolder} chooseFiles={id => portablePicker(id, true)} />
     <BrowserSuggestion capabilities={capabilities} paused={help || quickStart || create || !!removeNumbers || !!state.setupLibrary || sidebar || picker || lyricsOpen} details={() => setHelp(true)} />
     {quickStart && <QuickStart close={() => setQuickStart(false)} browserSupport={() => { setQuickStart(false); setHelp(true) }} />}

@@ -24,9 +24,12 @@
 .lyrics-drawer > .ambient-background { z-index: -2; }
 .lyric-line.current, .lyric-line.current:hover { color: var(--accent-text); text-shadow: 0 2px 12px #0002; }
 .lyric-line::before { content: none; }
-.track-row:is(:hover, :focus-within):not(.selected) { background: color-mix(in srgb, var(--text) 5%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 5%, transparent); }
+.track-row:is(:hover, :focus-visible, :has(:focus-visible)):not(.selected) { background: color-mix(in srgb, var(--text) 5%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 5%, transparent); }
 /* Preserve the drop indicator when a hovered row is also a drag target. */
-.track-row.drop-target:is(:hover, :focus-within):not(.selected) { box-shadow: inset 0 -2px 0 var(--accent-text), inset 0 0 0 1px color-mix(in srgb, var(--text) 5%, transparent); }
+.track-row.drop-target:is(:hover, :focus-visible, :has(:focus-visible)):not(.selected) { box-shadow: inset 0 -2px 0 var(--accent-text), inset 0 0 0 1px color-mix(in srgb, var(--text) 5%, transparent); }
+/* An explicit pointer deselection clears the wash immediately, even while
+   the pointer remains on the row. Keyboard focus keeps its normal outline. */
+.track-row.pointer-cleared:not(.selected):not(.drop-target) { background: transparent; box-shadow: none; }
 @keyframes ambient-arrive { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 767px) { .main { grid-column: 1; } }
 @media (prefers-reduced-motion: reduce) { .ambient-arriving { animation: none; } }
@@ -35,14 +38,14 @@
   .sidebar-shell, .player { background: var(--sidebar); }
   .dialog > .ambient-background { display: none; }
   .dialog:is(.lyrics-drawer, .now-playing-sheet) { background: var(--surface); }
-  .track-row:is(:hover, :focus-within):not(.selected) { background: var(--surface); }
+  .track-row:is(:hover, :focus-visible, :has(:focus-visible)):not(.selected):not(.pointer-cleared) { background: var(--surface); }
 }
 @supports not (backdrop-filter: blur(1px)) { .topbar { background: var(--bg); } .track-header, .selection-toolbar.floating { background: var(--surface); } }
 @media (forced-colors: active) {
   .topbar { background: Canvas; backdrop-filter: none; }
   .ambient-background { display: none; }
   .sidebar-shell, .player { background: Canvas; }
-  .track-row:is(:hover, :focus-within):not(.selected) { background: Canvas; box-shadow: none; outline: 1px solid Highlight; }
+  .track-row:is(:hover, :focus-visible, :has(:focus-visible)):not(.selected) { background: Canvas; box-shadow: none; outline: 1px solid Highlight; }
   .lyrics-scroll { scrollbar-width: auto; mask-image: none; }
   .lyrics-scroll::-webkit-scrollbar { display: block; }
 }

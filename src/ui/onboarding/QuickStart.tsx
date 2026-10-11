@@ -16,7 +16,7 @@ export function QuickStart({ close, browserSupport }: { close: () => void; brows
     <section className="quick-start-browser"><Globe2 size={21} aria-hidden="true" /><div><h3>Choose the right browser</h3><p>Desktop Chrome or Edge offers direct folder access and saving. Firefox, Safari and mobile browsers can still play selected music, edit playlists and export M3U8 files. Format support varies by device; filename sync also needs a successful rename check.</p><button className="text-button" onClick={browserSupport}>Check this browser’s support</button></div></section>
     <details className="quick-start-tips"><summary><Keyboard size={18} aria-hidden="true" />Useful tips<ChevronDown size={16} aria-hidden="true" /></summary><ul>
       <li><strong>Select a group.</strong> Ctrl/Cmd-click selects individual tracks; Shift-click selects a range. On mobile, use Select tracks.</li>
-      <li><strong>Use the keyboard.</strong> Space selects a focused row; Enter plays it. Alt+Arrow up/down moves selected playlist tracks. Ctrl/Cmd+Z undoes an edit.</li>
+      <li><strong>Use the keyboard.</strong> Space plays or pauses outside text fields and dialogs. Ctrl/Cmd+Space selects a focused row; Enter plays that row. Alt+Arrow up/down moves selected playlist tracks. Ctrl/Cmd+Z undoes an edit.</li>
       <li><strong>Find music anywhere.</strong> Ctrl/Cmd+K opens global search. Results keep your current playlist in place.</li>
       <li><strong>Change filename sync.</strong> Sync settings can pause sync or remove filename numbers after a reviewed preview.</li>
       <li><strong>Keep music local.</strong> Audio and artwork stay on your device. Online lyrics is optional and sends song details to LRCLIB only after you allow lookup.</li>

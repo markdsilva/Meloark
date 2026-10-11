@@ -36,10 +36,21 @@ their parent dialog, fit the viewport, and dismiss when their anchor scrolls.
 Touch devices, narrow screens, and inventories exceeding 200 options use a
 styled native select.
 
-Track selection supports click, Ctrl/Cmd-click, Shift-click, Space, Shift-arrows,
+Track selection supports click, Ctrl/Cmd-click, Shift-click, Ctrl/Cmd+Space, Shift-arrows,
 Ctrl/Cmd-A, and Escape. Enter and the play button start playback. Alt-arrows
 move selected playlist tracks. Touch selection and group reorder retain their
-explicit modes. Safety confirmations remain checkboxes.
+explicit modes. Safety confirmations remain checkboxes. Space plays/pauses from
+rows and ordinary app controls without selecting a row or activating the focused
+button; editing, menus and dialogs retain native keyboard behavior. Held-key
+repeats are suppressed. An explicitly deselected row clears its hover wash
+until the pointer leaves, while keyboard focus remains visible.
+
+The player’s upper-edge arrow switches between its default 112-pixel layout
+and a 72-pixel compact layout, with a persisted, storage-failure-safe preference.
+Grid rows animate together with workspace height; reduced motion is immediate.
+Playback, selection and queues stay mounted. Compact mode retains artwork and
+transport; seeking and audio details remain in player sheets. Desktop, narrow
+desktop and mobile checks verify the reclaimed 40 pixels, reload and controls.
 
 Track lists and setup previews remain virtualized. Header alignment is checked
 from 320 to 1600 pixels, and a 10,000-track check covers the final row, bounded
@@ -50,7 +61,9 @@ Quick start replaces moving tour popups with a scrollable five-step document,
 browser recommendations and expandable tips. Its close control stays visible.
 Context menus, selects, search and tooltips use common popup surface tokens.
 Menus support arrows, Home/End, Escape and normal Tab navigation; outside clicks
-keep focus on the control being used.
+keep focus on the control being used. A queued focus-scroll event no longer
+dismisses a newly opened context menu; scrolling that actually moves its
+anchor still dismisses it.
 
 Folder-access recovery is driven by file I/O permission failures and read-only
 queries when returning to the app or activating a library. Missing files and
