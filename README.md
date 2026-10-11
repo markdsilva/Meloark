@@ -35,7 +35,7 @@ Meloark combines **melody** and **ark** — a home for your music collection. Pl
 
 ## Get started in a minute
 
-1. **[Open Meloark](https://meloark.markdsilva.com/).** You can also [run it locally](#run-locally). Start the optional tour, or skip it and explore.
+1. **[Open Meloark](https://meloark.markdsilva.com/).** You can also [run it locally](#run-locally). Read the optional **Quick start** document, or explore.
 2. **Add your music.** Choose **Choose a music folder** and select your local collection. Subfolders are included. You can also select files, and play tracks straight away—no playlist needed.
 3. **Create a playlist.** Click **New playlist**, give it a name, keep **Start empty** selected, and choose **Create draft**. Already have an M3U/M3U8? Open it from the sidebar instead.
 4. **Make it yours.** In **All tracks**, use **+** to add songs. Switch to **Playlist** to drag tracks into order; **Undo** is there if you change your mind.
@@ -44,7 +44,7 @@ Meloark combines **melody** and **ark** — a home for your music collection. Pl
 > [!TIP]
 > Desktop Chrome or Edge offers the fullest experience, including permission-based folder access and playlist write-back. Firefox and Safari can still browse, play supported audio, edit, and export. Portable selections need to be reselected after a reload.
 
-Want lyrics? Open **Lyrics** in the player. Meloark reads local `.lrc` files first; online lookup is your choice. Need help later? The header's **Help / browser capabilities** button can restart the tour.
+Want lyrics? Open **Lyrics** in the player. Meloark reads local `.lrc` files first; online lookup is your choice. Need help later? **Help & browser support** reopens Quick start, tips and browser recommendations.
 
 ## Explore further
 
@@ -68,7 +68,9 @@ Keyboard shortcuts: Ctrl/Cmd+K global search, Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z 
 
 The persistent player supports play/pause, previous/next, seeking, volume/mute, shuffle, and repeat off/all/one. Library Play captures the visible filtered/sorted list without changing membership; later filters do not alter that queue. Playlist playback follows the active draft, preserves the playing occurrence on reorder, and advances to its surviving successor on removal. Selecting or creating a playlist leaves a library queue playing. Switching active playlists stops a playlist queue; switching libraries stops library and playlist queues. Search playback keeps a separate queue in its source library and leaves the current workspace in place; editing a query does not replace that queue. Add & Play switches to the playlist only after the add succeeds.
 
-New visitors can start or skip a short guided tour. Restart it from the Help/browser-capabilities panel. Icon controls have hover/focus hints. Right-click a track or sidebar row for contextual actions, use Shift+F10/context-menu key from the keyboard, or use the ellipsis button on touch devices. Right-click within an existing selection preserves the selected group.
+New visitors can read a stable five-step Quick start document. Reopen it from Help & browser support; it stays open while you read. Icon controls have hover/focus hints. Right-click a track or sidebar row for contextual actions, use Shift+F10/context-menu key from the keyboard, or use the ellipsis button on touch devices. Right-click within an existing selection preserves the selected group.
+
+If folder access expires, Meloark offers a recovery dialog and keeps your playlist drafts. **Grant access** requests read permission; **Grant write access** restores saving without retrying a write. Use Save playlist or Retry sync afterward. Without a remembered handle, reselect the same folder or files. Dismissed recovery can be reopened from **Reconnect**. Browser cache failures have a separate **Storage options** action with retry and export guidance.
 
 Playlist menus offer **Remove from app** or **Discard draft**, with confirmation before losing unsaved edits/history. On-disk playlists removed from the app stay hidden across Refresh/reload; **Manage playlists** restores them. In direct mode, **Delete playlist file** requires explicit confirmation and write permission. It targets only the named M3U/M3U8, checks its expected bytes, deletes non-recursively, and verifies absence. Deletion is permanent and outside edit undo. Portable mode uses your file manager for physical deletion. Legacy M3U sources and imported M3U8 drafts are separate targets. Audio files are never deleted.
 

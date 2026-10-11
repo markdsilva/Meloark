@@ -6,11 +6,11 @@
 .select-trigger:hover:not(:disabled) { border-color: var(--subtle); background: var(--elevated); }
 .select-trigger[aria-expanded=true] { border-color: var(--accent-text); }
 .select-trigger[aria-expanded=true] > svg { rotate: 180deg; }
-.select-popup { position: fixed; z-index: 90; overflow-y: auto; overscroll-behavior: contain; background: var(--elevated); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px; box-shadow: var(--shadow); scrollbar-width: thin; }
+.select-popup { position: fixed; z-index: 90; overflow-y: auto; overscroll-behavior: contain; background: var(--popup-bg); color: var(--text); border: 1px solid var(--popup-border); border-radius: var(--popup-radius); padding: 6px; box-shadow: var(--popup-shadow); scrollbar-width: thin; }
 .select-option { display: flex; align-items: center; gap: 12px; padding: 10px; min-height: 40px; border-radius: var(--control-radius); font-size: 13px; cursor: pointer; }
 .select-option > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .select-option small { display: block; color: var(--subtle); font-size: 12px; margin-top: 4px; }
-.select-option.highlighted { background: var(--hover); outline: 1px solid var(--border); outline-offset: -1px; }
+.select-option.highlighted { background: var(--hover); outline: 1px solid var(--popup-border); outline-offset: -1px; }
 .select-option[aria-selected=true] { color: var(--accent-text); }
 .select-option[aria-disabled=true] { color: var(--subtle); cursor: default; }
 .native-select { position: relative; }

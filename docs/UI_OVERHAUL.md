@@ -10,10 +10,10 @@ while keeping permissions, conflicts, file effects, and confirmations visible
 where users make those decisions.
 
 - Welcome uses one heading, a concrete introduction, three short tips, and a
-  tour invitation aligned with the example playlist’s footer divider.
+  Quick start invitation aligned with the example playlist’s footer divider.
 - Help starts with actual browser support, groups functions by availability,
   separates conditional permission checks, and retains technical details and
-  the tour. API presence alone does not claim verified rename or persistence.
+  the Quick start document. API presence alone does not claim verified rename or persistence.
 - Sidebar empty states are shorter. Privacy remains in the top bar, with an
   amber shield; Help replaces the repeated privacy block in the sidebar.
 - Playlist setup uses concise choices and paired fields where space allows.
@@ -25,7 +25,7 @@ where users make those decisions.
   beside artwork on desktop, with wrapped controls across the width on mobile.
   The filtered track count sits beside the view tabs. Desktop selection actions
   replace the column heading without moving rows during a drag. The sticky
-  heading uses a translucent theme tint, with solid backgrounds for reduced
+  heading uses a lightly darkened, blurred ambient tint, with solid backgrounds for reduced
   transparency and system colors for high contrast.
 
 ## Controls
@@ -44,8 +44,21 @@ explicit modes. Safety confirmations remain checkboxes.
 Track lists and setup previews remain virtualized. Header alignment is checked
 from 320 to 1600 pixels, and a 10,000-track check covers the final row, bounded
 DOM size, and selection retained after scrolling and search. No dependencies,
-file-sync algorithms, audio engine, search worker, or ambient-color processing
-were changed.
+file-sync algorithms, search worker, or ambient-color processing were changed.
+
+Quick start replaces moving tour popups with a scrollable five-step document,
+browser recommendations and expandable tips. Its close control stays visible.
+Context menus, selects, search and tooltips use common popup surface tokens.
+Menus support arrows, Home/End, Escape and normal Tab navigation; outside clicks
+keep focus on the control being used.
+
+Folder-access recovery is driven by file I/O permission failures and read-only
+queries when returning to the app or activating a library. Missing files and
+autoplay restrictions are handled separately. No continuous polling is added.
+Recovery waits for existing dialogs to close, retains drafts, and only requests
+permissions after an explicit click. Write recovery does not retry file edits.
+Browser storage warnings retain a separate retry/export action. Reselecting the
+active library retains the open view; metadata/artwork resume after a rescan.
 
 ## Validation
 

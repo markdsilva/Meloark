@@ -1,6 +1,7 @@
 import { applyMetadata, sources, useApp } from '../app/store'
 import { dirname, type TrackMetadata } from '../domain/models'
 import { withFilesystemLock } from '../platform/filesystem/mutationLock'
+import { reportFileAccessError } from '../platform/filesystem/accessEvents'
 
 interface Job { libraryId: string; generation: number; trackId: string; artwork: boolean }
 const jobs: Job[] = []
@@ -75,8 +76,9 @@ async function drain() {
   try {
     while (jobs.length) {
       const job = jobs.shift()!
+      const source = sources.get(job.libraryId)
       try {
-        const library = useApp.getState().libraries.find(l => l.id === job.libraryId), source = sources.get(job.libraryId), track = library?.tracks[job.trackId]
+        const library = useApp.getState().libraries.find(l => l.id === job.libraryId), track = library?.tracks[job.trackId]
         if (!library?.connected || library.generation !== job.generation || !source || !track) continue
         if (!job.artwork && track.metadata.technicalVersion === 1 && (track.metadataStatus === 'ready' || checkedArtwork.has(artKey(job)))) continue
         let metadata = await withFilesystemLock(async () => {
@@ -108,7 +110,10 @@ async function drain() {
           const oldLibrary = useApp.getState().libraries.find(l => l.id === old.libraryId), oldTrack = oldLibrary?.tracks[old.trackId]
           if (oldLibrary && oldTrack) applyMetadata(old.libraryId, oldLibrary.generation, old.trackId, { ...oldTrack.metadata, artwork: undefined }, true)
         }
-      } catch { /* One unreadable track must not stop library browsing. */ }
+      } catch (error) {
+        if (source && sources.get(job.libraryId) === source && useApp.getState().libraries.find(item => item.id === job.libraryId)?.generation === job.generation) reportFileAccessError(source, error, 'read')
+        // Missing or malformed files still do not stop library browsing.
+      }
       finally { pending.delete(key(job)) }
       await new Promise(resolve => setTimeout(resolve, 0))
     }

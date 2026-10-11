@@ -127,6 +127,7 @@ test('portable playlist preserves duplicates, supports history, exports, and rec
   await page.waitForTimeout(500)
   await page.reload()
   await expect(page.getByText('Reconnect your music')).toBeVisible()
+  await page.getByRole('dialog', { name: 'Reselect your music' }).getByRole('button', { name: 'Not now', exact: true }).click()
   await page.getByRole('button', { name: 'Active playlist' }).click()
   await expect(page.getByRole('grid').getByRole('row')).toHaveCount(3)
   expect(unexpectedRequests).toEqual([])

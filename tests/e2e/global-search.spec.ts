@@ -103,6 +103,7 @@ test('keyboard shortcuts, fast edits, dismissal and disconnected libraries remai
   await search(page).click(); await page.getByRole('tab', { name: 'Playlist', exact: true }).click(); await expect(results(page)).toHaveCount(0)
   await page.reload()
   await expect(page.getByText('Reconnect your music', { exact: true })).toBeVisible()
+  await page.getByRole('dialog', { name: 'Reselect your music' }).getByRole('button', { name: 'Not now', exact: true }).click()
   await search(page).fill('Sunrise')
   await expect(results(page).getByRole('option')).toHaveAttribute('aria-disabled', 'true')
   await expect(results(page).getByRole('option')).toContainText('Reconnect to play')

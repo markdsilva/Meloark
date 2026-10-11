@@ -3,8 +3,8 @@ import { File as NativeFile } from 'node:buffer'
 import { webcrypto } from 'node:crypto'
 import { DirectSource } from '../../src/platform/filesystem/direct'
 import type { DirectoryHandle } from '../../src/platform/filesystem/types'
-import { activeLibrary, activeSession, createPlaylist, history, loadPlaylist, persistNow, reorderEntries, sources, useApp } from '../../src/app/store'
-import { createSyncedPlaylist, disableOrderSync, recoverSync, removeFilenameNumbers, syncBusy } from '../../src/app/orderSync'
+import { activeLibrary, activeSession, createPlaylist, history, loadPlaylist, persistNow, reconnect, reorderEntries, sources, useApp } from '../../src/app/store'
+import { createSyncedPlaylist, disableOrderSync, recoverSync, removeFilenameNumbers, requestOrderSync, syncBusy } from '../../src/app/orderSync'
 import { JOURNAL_PATH, planNumberRemoval } from '../../src/domain/orderSync'
 import { equalBytes } from '../../src/platform/filesystem/saveProtocol'
 import { loadLibraries, loadSyncJournal } from '../../src/platform/persistence/database'
@@ -176,6 +176,30 @@ describe('removing filename numbers in app state', () => {
 })
 afterEach(async () => { await persistNow(); sources.clear(); vi.restoreAllMocks() })
 describe('filename-sync app state', () => {
+  it('read permission loss before sync does not create a phantom recovery journal or block reconnection', async () => {
+    const t = fixture(true)
+    useApp.setState({ accessIssues: {} })
+    await createSyncedPlaylist('Both', '', 'both', ['t0', 't1', 't2']); await settled()
+    vi.mocked(t.source.moveFile).mockClear()
+    const read = t.source.readFresh.bind(t.source)
+    t.source.readFresh = async () => { throw new DOMException('Read permission expired', 'NotAllowedError') }
+    reorderEntries(new Set([activeSession()!.entries[0].id]), 3)
+    await vi.waitFor(() => { expect(activeSession()?.sync?.status).toBe('error'); expect(syncBusy('lib')).toBe(false) })
+    expect(activeLibrary()?.connected).toBe(false)
+    expect(useApp.getState().accessIssues.lib.intent).toBe('read')
+    expect(activeLibrary()?.syncRecovery).toBeUndefined()
+    expect(t.files.has(JOURNAL_PATH)).toBe(false)
+    expect(t.source.moveFile).not.toHaveBeenCalled()
+    t.source.readFresh = read
+    expect(await reconnect('lib')).toBe(true)
+    expect(activeSession()?.sync?.status).toBe('error')
+    expect(t.source.moveFile).not.toHaveBeenCalled()
+    requestOrderSync()
+    await settled()
+    expect(activeLibrary()?.syncRecovery).toBeUndefined()
+    expect(useApp.getState().accessIssues.lib).toBeUndefined()
+    expect(activeSession()?.entries.map(entry => entry.trackId)).toEqual(['t1', 't2', 't0'])
+  })
   it('blocks externally changed audio before starting any native rename', async () => {
     const t = fixture()
     await createSyncedPlaylist('Both', '', 'both', ['t0', 't1', 't2']); await settled()

@@ -10,6 +10,7 @@ import { clearSyncJournal, loadSyncJournal, saveSyncJournal } from '../platform/
 import { equalBytes } from '../platform/filesystem/saveProtocol'
 import { player, usePlayer } from '../playback/player'
 import { withFilesystemLock } from '../platform/filesystem/mutationLock'
+import { reportFileAccessError, reportFileAccessLoss } from '../platform/filesystem/accessEvents'
 import { folderOrderError, reviewedEntries, validatePlaylistOrder, type PlaylistOrderChoice, type PlaylistOrderReview } from './playlistOrder'
 export { FILESYSTEM_LOCK, withFilesystemLock } from '../platform/filesystem/mutationLock'
 
@@ -89,6 +90,10 @@ export async function checkRecovery(libraryId: string): Promise<boolean> {
     if (journal.libraryId !== libraryId) notify('This folder contains an interrupted sync from another browser session. Recover its recorded file changes, then review the folder to set up sync again.')
     return true
   } catch (error) {
+    if (reportFileAccessError(source, error, 'read')) {
+      updateLibrary(libraryId, library => ({ ...library, connected: false, scanning: false }))
+      return true
+    }
     updateLibrary(libraryId, library => ({ ...library, scanning: false, connected: true, syncRecovery: message(error) }))
     return true
   }
@@ -326,14 +331,18 @@ async function runSync(libraryId: string, sessionId: string) {
     await withFilesystemLock(async () => {
       const playback = usePlayer.getState()
       if (playback.current && playback.context?.libraryId === libraryId && !playback.renameSafe) { setSync(libraryId, sessionId, 'waiting', 'Waiting until playback stops.'); return }
-      if ((await source.getAccess()).write !== 'granted') throw new Error('Write access expired. Click Retry sync to reconnect it.')
+      if ((await source.getAccess()).write !== 'granted') {
+        reportFileAccessLoss(source, 'write')
+        throw new Error('Write access expired. Restore access, then click Retry sync.')
+      }
       const journal = await makeJournal(libraryId, sessionId, source)
       if (!journal.moves.length && !journal.patches.length) { await commitJournal({ ...journal, phase: 'complete' }, source); return }
       const done = await executeJournal(source, journal, null, saveSyncJournal)
       await commitJournal(done, source)
     })
   } catch (error) {
-    const recovery = await checkRecovery(libraryId)
+    reportFileAccessError(source, error, 'write')
+    const recovery = await checkRecovery(libraryId) && useApp.getState().libraries.find(item => item.id === libraryId)?.connected !== false
     if (recovery) updateLibrary(libraryId, current => ({ ...current, syncRecovery: `${message(error)} Recovery data is preserved. Recover filename sync to continue; keep the temporary files and journal.` }))
     setSync(libraryId, sessionId, recovery ? 'recovery' : 'error', message(error))
   } finally {

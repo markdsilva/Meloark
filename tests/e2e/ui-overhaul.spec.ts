@@ -37,6 +37,26 @@ test('row selection supports modifiers, Space and ranges without starting playba
   await expect(a).toHaveCSS('outline-style', 'solid')
 })
 
+test('menus let Tab continue normally and outside clicks keep dialog focus', async ({ page }) => {
+  await library(page)
+  const sort = page.getByRole('button', { name: 'Sort tracks', exact: true })
+  await sort.click()
+  await expect(page.getByRole('menuitemradio', { name: 'Playlist order', exact: true })).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(page.getByRole('menuitemradio', { name: 'Title', exact: true })).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('menu')).toHaveCount(0)
+  await expect(sort).not.toBeFocused()
+  expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY')
+  await sort.click()
+  await page.getByRole('button', { name: 'New playlist', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Create a playlist', exact: true })
+  await expect(dialog).toBeVisible()
+  expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'New playlist', exact: true })).toBeFocused()
+})
+
 test('desktop playlist select supports typeahead, Escape and normal Tab inside a dialog', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 }); await library(page)
   await page.getByRole('button', { name: 'New playlist', exact: true }).click()

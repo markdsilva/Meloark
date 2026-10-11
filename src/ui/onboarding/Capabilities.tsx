@@ -9,7 +9,7 @@ import { Dialog } from '../shared/Dialog'
 import { isChromiumBrowser } from './BrowserSuggestion'
 
 type Status = 'Available' | 'Limited' | 'Unavailable' | 'Not yet verified'
-export function CapabilityDialog({ capabilities: c, close, tour }: { capabilities: Capabilities; close: () => void; tour?: () => void }) {
+export function CapabilityDialog({ capabilities: c, close, quickStart }: { capabilities: Capabilities; close: () => void; quickStart?: () => void }) {
   const library = useApp(s => s.libraries.find(l => l.id === s.activeLibrary))
   const outcomes = usePlatformStatus()
   const libraryId = library?.id
@@ -51,7 +51,7 @@ export function CapabilityDialog({ capabilities: c, close, tour }: { capabilitie
     {outcomes.pickerReason && <p className="callout" role="status">Folder access failed: {outcomes.pickerReason}. Select files or use Export.</p>}
     {library && <section className="capability-current"><strong>{library.name}</strong><p>{!library.connected || access?.reconnect ? 'Reconnect this library to play or save.' : library.kind === 'portable' ? 'Portable library · Export only · Reselect files after reopening.' : 'Direct-access library · Saving may ask for write permission.'}</p></section>}
     {groups.filter(group => group.items.length).map(group => <section className="capability-group" key={group.title}><h3>{group.title}</h3><div className="capability-list">{group.items.map(([name, status, description]) => <div className="capability-row" key={name}><span><strong>{name}</strong><small>{description}</small></span><span className={`capability-badge ${status.toLowerCase().replaceAll(' ', '-')}`}>{status === 'Limited' ? 'Conditional' : status === 'Not yet verified' ? 'Not verified' : status}</span></div>)}</div></section>)}
-    {tour && <section className="help-getting-started"><Compass size={22} /><div><h3>Getting started</h3><p>Follow a short tour to open music and arrange a playlist.</p></div><button className="button secondary" onClick={tour}>Start tour</button></section>}
+    {quickStart && <section className="help-getting-started"><Compass size={22} /><div><h3>Getting started</h3><p>Five steps, practical tips and browser recommendations.</p></div><button className="button secondary" onClick={quickStart}>Read quick start</button></section>}
     <details className="capability-details"><summary>Technical details & permissions<ChevronDown size={16} /></summary>
       <p className="dialog-intro">Browser support does not grant file access. Opening this panel requests no permissions.</p>
       {library && <p className="capability-access">{library.kind === 'portable' ? `${library.connected ? 'Connected portable selection' : 'Reselection required'} · Export only` : `Read: ${access?.read ?? 'checking'} · Write: ${access?.write ?? 'checking'}${access?.reconnect || !library.connected ? ' · Reconnect required' : ''}`}</p>}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Globe2, X } from 'lucide-react'
 import type { Capabilities } from '../../platform/capabilities/detect'
 import { useApp } from '../../app/store'
-import { useGuide } from './Guide'
+import { useDialogCount } from '../shared/Dialog'
 
 const preference = 'trackindex-browser-tip-v1'
 let seenInSession = false
@@ -19,12 +19,13 @@ export function BrowserRecommendation() {
 }
 
 export function BrowserSuggestion({ capabilities, paused = false, details }: { capabilities: Capabilities; paused?: boolean; details: () => void }) {
-  const ready = useApp(s => s.ready), guideActive = useGuide(s => s.active)
+  const ready = useApp(s => s.ready)
+  const dialogs = useDialogCount(s => s.count)
   const [eligible] = useState(() => !capabilities.directoryPicker && !isChromiumBrowser())
   const [dismissed, setDismissed] = useState(() => {
     try { return seenInSession || localStorage.getItem(preference) === 'seen' } catch { return seenInSession }
   })
-  const visible = eligible && ready && !dismissed && !paused && !guideActive
+  const visible = eligible && ready && !dismissed && !paused && !dialogs
   useEffect(() => {
     if (!visible) return
     seenInSession = true

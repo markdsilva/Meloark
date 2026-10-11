@@ -4,6 +4,7 @@ import type { LibrarySource } from '../platform/filesystem/types'
 import { PlaybackQueue, type Repeat, type QueueContext, type QueueItem } from './queue'
 import { liveBitrate } from '../metadata/liveBitrate'
 import { withFilesystemLock } from '../platform/filesystem/mutationLock'
+import { reportFileAccessError } from '../platform/filesystem/accessEvents'
 
 interface PlayerState {
   current: string | null; track?: Track; playing: boolean; loading: boolean; position: number; duration: number
@@ -85,8 +86,8 @@ class PlayerController {
     audio.pause()
     liveBitrate.register()
     usePlayer.setState({ current: id, track, loading: true, position: 0, duration: 0, error: undefined, renameSafe: false })
+    const source = this.source, snapshot = this.snapshotPlayback
     try {
-      const source = this.source, snapshot = this.snapshotPlayback
       const read = async () => {
         const current = this.tracks[track.id] ?? track
         const original = await source.readFile(current.path)
@@ -115,6 +116,10 @@ class PlayerController {
       }
     } catch (error) {
       if (token !== this.generation) return
+      if (reportFileAccessError(source, error, 'read')) {
+        this.stop('Folder access is unavailable. Reconnect your music to play this track.')
+        return
+      }
       this.queue.unavailable.add(id)
       usePlayer.setState({ error: error instanceof Error ? error.message : 'Track unavailable.' })
       const next = attempts < this.queue.entries.length ? this.queue.next() : null

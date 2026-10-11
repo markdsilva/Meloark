@@ -16,6 +16,7 @@ import { scheduleMetadata } from '../metadata/scheduler'
 import { validatePlaylistDeletion } from '../platform/filesystem/deleteProtocol'
 import { forgetLyricsLibrary } from '../lyrics/store'
 import { checkRecovery, requestOrderSync, scheduleSync, syncBusy, withFilesystemLock } from './orderSync'
+import { isFileAccessError, onFileAccessLoss, type AccessIntent } from '../platform/filesystem/accessEvents'
 
 export interface Library {
   id: string; name: string; kind: 'direct' | 'portable'; connected: boolean; scanning: boolean; generation: number
@@ -30,13 +31,34 @@ interface AppState {
   ready: boolean; notice?: string; storageError?: string; busy: boolean
   visibleTrackIds: string[]
   setupLibrary?: string
+  accessIssues: Record<string, { intent: AccessIntent; revision: number; source?: LibrarySource }>
 }
-export const useApp = create<AppState>(() => ({ libraries: [], view: 'library', ready: false, busy: false, visibleTrackIds: [] }))
+export const useApp = create<AppState>(() => ({ libraries: [], view: 'library', ready: false, busy: false, visibleTrackIds: [], accessIssues: {} }))
 export const sources = new Map<string, LibrarySource>()
 const scanners = new Map<string, AbortController>()
 let persistenceTimer: ReturnType<typeof setTimeout> | undefined
 let persistenceChain = Promise.resolve()
 let startup: Promise<void> | undefined
+let accessRevision = 0
+onFileAccessLoss((source, intent) => {
+  const id = [...sources].find(([, current]) => current === source)?.[0]
+  if (id) requestLibraryAccess(id, intent)
+})
+export function requestLibraryAccess(id: string, intent: AccessIntent = 'read') {
+  const state = useApp.getState(), library = state.libraries.find(item => item.id === id), source = sources.get(id)
+  if (!library) return
+  const previous = state.accessIssues[id]
+  if (previous && previous.source === source && (previous.intent === 'read' || previous.intent === intent)) return
+  useApp.setState({ accessIssues: { ...state.accessIssues, [id]: { intent, revision: ++accessRevision, source } } })
+  if (intent === 'read') {
+    scanners.get(id)?.abort()
+    updateLibrary(id, current => ({ ...current, connected: false, scanning: false }), false)
+  }
+}
+export function clearLibraryAccessIssue(id: string, intent: AccessIntent) {
+  if (useApp.getState().accessIssues[id]?.intent !== intent) return
+  useApp.setState(state => ({ accessIssues: Object.fromEntries(Object.entries(state.accessIssues).filter(([key]) => key !== id)) }))
+}
 export const activeLibrary = () => useApp.getState().libraries.find(library => library.id === useApp.getState().activeLibrary)
 export const activeSession = () => { const library = activeLibrary(); return library?.activePlaylist ? library.sessions[library.activePlaylist] : undefined }
 export const findPlaylistSession = (library: Library, pathOrId: string) => library.sessions[pathOrId] ?? playlistSession(library, pathOrId)
@@ -50,8 +72,22 @@ export async function persistNow(strict = false) {
   const libraries = useApp.getState().libraries
   const task = persistenceChain.then(() => saveLibraries(libraries))
   persistenceChain = task.catch(() => undefined)
-  try { await task }
+  try {
+    await task
+    if (useApp.getState().storageError === 'Browser storage is unavailable or full. This session still works; save or export your playlist before closing.') useApp.setState({ storageError: undefined })
+  }
   catch (error) { useApp.setState({ storageError: 'Browser storage is unavailable or full. This session still works; save or export your playlist before closing.' }); if (strict) throw error }
+}
+export async function retryBrowserStorage() {
+  try {
+    await persistNow(true)
+    for (const [id, source] of sources) if (source instanceof DirectSource) await saveHandle(id, source.root)
+    useApp.setState({ storageError: undefined })
+    return true
+  } catch {
+    if (!useApp.getState().storageError) useApp.setState({ storageError: 'Browser storage could not remember folder access. Export playlists before closing and reselect folders next time.' })
+    return false
+  }
 }
 export function updateLibrary(id: string, update: (library: Library) => Library, persist = true) {
   useApp.setState(state => ({ libraries: state.libraries.map(library => library.id === id ? update(library) : library) }))
@@ -123,12 +159,18 @@ export function bootstrap() {
         sessions: Object.fromEntries(Object.entries(library.sessions).map(([id, session]) => [id, { ...session, undo: [], redo: [],
           status: session.status === 'saving' ? 'unverified' as const : session.status }])) }))
       useApp.setState({ libraries, activeLibrary: libraries[0]?.id })
-      for (const library of libraries.filter(l => l.kind === 'direct')) {
-        const handle = await loadHandle(library.id)
-        if (handle) {
-          const source = new DirectSource(handle)
-          sources.set(library.id, source)
-          if ((await source.getAccess()).read === 'granted') void scanLibrary(library.id)
+      for (const library of libraries) {
+        try {
+          const handle = library.kind === 'direct' ? await loadHandle(library.id) : undefined
+          if (handle) {
+            const source = new DirectSource(handle)
+            sources.set(library.id, source)
+            if ((await source.getAccess()).read === 'granted') void scanLibrary(library.id)
+            else requestLibraryAccess(library.id)
+          } else requestLibraryAccess(library.id)
+        } catch (error) {
+          requestLibraryAccess(library.id)
+          if (!isFileAccessError(error)) useApp.setState({ storageError: 'Folder access could not be remembered. Reselect your music and export playlist copies before closing.' })
         }
       }
     } catch { useApp.setState({ storageError: 'Library remembering is unavailable. You can still select files and export playlists.' }) }
@@ -143,10 +185,12 @@ export async function addSource(source: LibrarySource, reconnectId?: string, set
   const existing = useApp.getState().libraries.find(l => l.id === id)
   if (existing && existing.name !== source.name && !confirm(`Reconnect “${existing.name}” to “${source.name}”? Review missing tracks afterward.`)) return
   sources.set(id, source)
+  clearLibraryAccessIssue(id, 'read')
+  clearLibraryAccessIssue(id, 'write')
   if (!existing) useApp.setState(state => ({ libraries: [...state.libraries, { id, name: source.name, kind: source.kind, connected: true,
     scanning: false, generation: 0, tracks: {}, playlists: [], files: [], sessions: {} }], activeLibrary: id, view: 'library' }))
   else updateLibrary(id, library => ({ ...library, kind: source.kind, name: source.name, connected: true }))
-  selectLibrary(id)
+  if (!existing) selectLibrary(id)
   await scanLibrary(id)
   const current = useApp.getState().libraries.find(library => library.id === id)
   if (!existing && setupFolder && current?.connected && !current.scanError && !current.syncRecovery && Object.keys(current.tracks).length) useApp.setState({ setupLibrary: id })
@@ -168,10 +212,30 @@ export async function openDirectory(reconnectId?: string) {
     try { await saveHandle(id, handle) } catch { useApp.setState({ storageError: 'The folder opened, but its handle could not be remembered. Reselect it next time.' }) }
   } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) { usePlatformStatus.setState({ pickerReason: message(error) }); notify(message(error)) } }
 }
-export async function reconnect(id: string) {
+export async function reconnect(id: string): Promise<boolean> {
   const source = sources.get(id)
-  try { if (source && await source.requestAccess('read')) await scanLibrary(id); else notify('Choose the library folder again to reconnect.') }
-  catch (error) { notify(message(error)) }
+  try {
+    if (source && await source.requestAccess('read') && sources.get(id) === source) {
+      await scanLibrary(id)
+      const connected = !!useApp.getState().libraries.find(item => item.id === id)?.connected
+      if (connected) clearLibraryAccessIssue(id, 'read')
+      return connected
+    }
+    requestLibraryAccess(id)
+    notify('Choose the library folder again to reconnect.')
+  } catch (error) { notify(message(error)) }
+  return false
+}
+export async function restoreWriteAccess(id: string): Promise<boolean> {
+  const source = sources.get(id)
+  try {
+    if (source && await source.requestAccess('write') && sources.get(id) === source) {
+      clearLibraryAccessIssue(id, 'write')
+      notify('Write access restored. Use Save playlist or Retry sync to continue.')
+      return true
+    }
+  } catch (error) { notify(message(error)) }
+  return false
 }
 export async function scanLibrary(id: string) {
   const source = sources.get(id), old = useApp.getState().libraries.find(l => l.id === id)
@@ -206,6 +270,7 @@ export async function scanLibrary(id: string) {
     })
     updateLibrary(id, library => ({ ...library, connected: true, scanning: false, tracks, files, playlists: playlists.sort(naturalCompare),
       sessions: Object.fromEntries(Object.entries(library.sessions).map(([key, session]) => [key, { ...session, entries: refreshEntries(session.entries), saved: refreshEntries(session.saved) }])) }))
+    clearLibraryAccessIssue(id, 'read')
     for (const session of Object.values(old.sessions)) await reconcileSource(id, session.id)
     for (const session of Object.values(old.sessions)) if (session.sync?.enabled) scheduleSync(id, session.id)
     const current = useApp.getState().libraries.find(l => l.id === id)
@@ -214,7 +279,8 @@ export async function scanLibrary(id: string) {
     scheduleMetadata(id)
   } catch (error) {
     if (controller.signal.aborted) {
-      if (scanners.get(id) === controller) updateLibrary(id, library => ({ ...library, scanning: false, scanError: 'Scan canceled. Refresh to complete the inventory.' }))
+      if (scanners.get(id) === controller) updateLibrary(id, library => ({ ...library, scanning: false,
+        scanError: useApp.getState().accessIssues[id]?.intent === 'read' ? library.scanError : 'Scan canceled. Refresh to complete the inventory.' }))
       return
     }
     updateLibrary(id, library => ({ ...library, scanning: false, connected: false, scanError: message(error) }))
@@ -373,7 +439,8 @@ export async function forgetLibrary(id: string) {
   const library = useApp.getState().libraries.find(item => item.id === id)
   if (syncBusy(id) || library?.syncRecovery) { notify('Finish filename sync recovery before forgetting this library.'); return }
   scanners.get(id)?.abort(); sources.delete(id)
-  useApp.setState(state => ({ libraries: state.libraries.filter(library => library.id !== id), activeLibrary: state.activeLibrary === id ? state.libraries.find(l => l.id !== id)?.id : state.activeLibrary }))
+  useApp.setState(state => ({ libraries: state.libraries.filter(library => library.id !== id), activeLibrary: state.activeLibrary === id ? state.libraries.find(l => l.id !== id)?.id : state.activeLibrary,
+    accessIssues: Object.fromEntries(Object.entries(state.accessIssues).filter(([key]) => key !== id)) }))
   syncPlayer()
   try {
     await forgetLyricsLibrary(id)

@@ -1,8 +1,8 @@
 import { test, expect, type Page } from '@playwright/test'
 import { wavSample } from '../fixtures/audio'
 
-async function load(page: Page) {
-  await page.goto('/')
+async function load(page: Page, navigate = true) {
+  if (navigate) await page.goto('/')
   const covers = await page.evaluate(() => ['#c62c47', '#224bd1'].map(color => {
     const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64
     const context = canvas.getContext('2d')!; context.fillStyle = color; context.fillRect(0, 0, 64, 64)
@@ -86,7 +86,8 @@ test('the ambient toggle persists and reduced motion, mobile lyrics and menus re
   await toggle.click(); await expect(toggle).toHaveAttribute('aria-pressed', 'false')
   await expect.poll(() => primary(page)).toEqual([43, 33, 22])
   await page.reload(); await expect(toggle).toHaveAttribute('aria-pressed', 'false')
-  await load(page)
+  await page.getByRole('dialog', { name: 'Reselect your music' }).getByRole('button', { name: 'Not now', exact: true }).click()
+  await load(page, false)
   await page.getByRole('button', { name: 'Play Red', exact: true }).click()
   await expect.poll(() => primary(page)).toEqual([43, 33, 22])
   await toggle.click(); await expect.poll(async () => { const color = await primary(page); return color[0] > color[2] * 2 }).toBe(true)

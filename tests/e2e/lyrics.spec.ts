@@ -102,6 +102,7 @@ test('online lookup is opt-in, uses verified tags, caches results, and allows a 
   await page.getByRole('button', { name: /Song Fixture Artist.*Synced/ }).click()
   await expect(panel(page).locator('.lyric-line')).toHaveText(['Selected version'])
   await page.waitForTimeout(400); await page.reload()
+  await page.getByRole('dialog', { name: 'Reselect your music' }).getByRole('button', { name: 'Not now', exact: true }).click()
   await expect(page.locator('.track-title strong')).toHaveText(['Other', 'Song'])
   await presentPausedTrack(page)
   await page.getByRole('contentinfo').getByRole('button', { name: 'Lyrics', exact: true }).click()

@@ -70,6 +70,7 @@ test('desktop collapse persists and rail keeps library selection reachable', asy
   await page.getByRole('button', { name: 'Libraries and playlists', exact: true }).click()
   await expect(page.getByRole('dialog')).toBeVisible(); await page.keyboard.press('Escape')
   await page.reload(); await expect(page.locator('.app')).toHaveClass(/collapsed/)
+  await page.getByRole('dialog', { name: 'Reselect your music' }).getByRole('button', { name: 'Not now', exact: true }).click()
   await page.getByRole('button', { name: 'Expand sidebar', exact: true }).click(); await expect(page.locator('.app')).not.toHaveClass(/collapsed/)
 })
 

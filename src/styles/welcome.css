@@ -22,9 +22,9 @@
 .preview-track > span:last-child { margin-left: auto; color: var(--subtle); }
 .preview-bottom { display: flex; gap: 8px; align-items: center; padding: 18px 0; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
 .preview-bottom svg { color: var(--accent-text); }
-.welcome-guide { grid-column: 1; grid-row: 2; align-self: end; padding-bottom: 55px; }
-.welcome-guide:empty { display: none; }
-.welcome-guide .guide-invitation { margin: 0; max-width: none; background: color-mix(in srgb, var(--surface) 88%, transparent); padding: 16px; }
+.welcome-help { grid-column: 1; grid-row: 2; align-self: end; padding-bottom: 55px; }
+.welcome-help:empty { display: none; }
+.welcome-help .quick-start-invitation { margin: 0; max-width: none; background: color-mix(in srgb, var(--surface) 88%, transparent); padding: 16px; }
 .feature-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
 .feature-grid > div { border-top: 1px solid var(--border); padding-top: 24px; }
 .feature-grid svg { width: 22px; color: var(--accent-text); margin-bottom: 12px; }
@@ -36,8 +36,8 @@
 .browser-note .text-button { margin-left: auto; white-space: nowrap; }
 @container (max-width: 850px) {
   .welcome { grid-template-columns: minmax(0, 1fr); gap: 28px; }
-  .welcome-copy, .welcome-guide { grid-column: 1; grid-row: auto; }
-  .welcome-guide { padding-bottom: 0; }
+  .welcome-copy, .welcome-help { grid-column: 1; grid-row: auto; }
+  .welcome-help { padding-bottom: 0; }
   .welcome-preview { display: none; }
   .welcome h1 { font-size: clamp(36px, 6vw, 50px); }
 }

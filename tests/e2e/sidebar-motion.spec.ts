@@ -40,6 +40,7 @@ test('sidebar resize follows the pointer, clamps and persists independently of c
   await expect(page.getByRole('separator', { name: 'Resize sidebar' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'All tracks', exact: true })).toHaveCount(1)
   await page.reload(); await expect.poll(() => width(page)).toBe(64)
+  await page.getByRole('dialog', { name: 'Reselect your music' }).getByRole('button', { name: 'Not now', exact: true }).click()
   await page.getByRole('button', { name: 'Expand sidebar', exact: true }).click()
   await expect.poll(() => width(page)).toBe(360)
   await startDrag(page); await page.mouse.move(0, 250); await page.mouse.up()

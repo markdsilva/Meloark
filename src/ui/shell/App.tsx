@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ArrowRight, Check, ChevronRight, Disc3, Download, FileMusic, FolderOpen, HardDrive, HelpCircle, LibraryBig, ListMusic, LoaderCircle, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Undo2, Redo2, X } from 'lucide-react'
-import { bootstrap, cancelScan, createNormalizedCopy, exportPlaylist, forgetLibrary, history, loadPlaylist, notify, openDirectory, openPortable, persistNow, reconnect, reconcileSource, savePlaylist, scanLibrary, selectLibrary, selectView, useApp } from '../../app/store'
+import { bootstrap, cancelScan, createNormalizedCopy, exportPlaylist, forgetLibrary, history, loadPlaylist, notify, openDirectory, openPortable, persistNow, reconcileSource, savePlaylist, scanLibrary, selectLibrary, selectView, useApp } from '../../app/store'
 import { isDirty, naturalCompare } from '../../domain/models'
 import { detectCapabilities } from '../../platform/capabilities/detect'
 import { EncodingError } from '../../playlists/codec'
@@ -25,7 +25,8 @@ import { PlaylistNavigation } from '../playlist/PlaylistNavigation'
 import { SyncControls } from '../playlist/SyncControls'
 import { RemoveFilenameNumbers } from '../playlist/RemoveFilenameNumbers'
 import { recoverSync } from '../../app/orderSync'
-import { Guide, startGuide } from '../onboarding/Guide'
+import { QuickStart } from '../onboarding/QuickStart'
+import { AccessController, AccessRecovery, type RecoveryRequest } from '../onboarding/AccessRecovery'
 import { Welcome } from '../onboarding/Welcome'
 import { Tooltips } from '../shared/Tooltips'
 import { BrowseTabs } from '../shared/BrowseTabs'
@@ -41,6 +42,8 @@ export function App() {
   const [help, setHelp] = useState(false), [create, setCreate] = useState(false), [sidebar, setSidebar] = useState(false)
   const [albumQuery, setAlbumQuery] = useState(''), [folder, setFolder] = useState(''), [artist, setArtist] = useState(''), [sort, setSort] = useState('order')
   const [filters, setFilters] = useState(false)
+  const [quickStart, setQuickStart] = useState(false)
+  const [recoveryRequest, setRecoveryRequest] = useState<RecoveryRequest>()
   const [trackCountHost, setTrackCountHost] = useState<HTMLSpanElement | null>(null)
   const [sortAnchor, setSortAnchor] = useState<MenuAnchor>()
   const mobile = useMediaQuery('(max-width: 767px)')
@@ -73,7 +76,7 @@ export function App() {
     window.addEventListener('keydown', keys); return () => window.removeEventListener('keydown', keys)
   }, [session, library?.kind, capabilities.userFileWriting])
   useEffect(() => { setAlbumQuery(''); setFolder(''); setArtist(''); setSort('order') }, [library?.id, state.view])
-  useEffect(() => { if (library && playerTrack) prioritizeMetadata(library.id, [playerTrack.id]) }, [library?.id, playerTrack?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (library && playerTrack) prioritizeMetadata(library.id, [playerTrack.id]) }, [library?.id, library?.connected, library?.generation, playerTrack?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const tracks = useMemo(() => Object.values(library?.tracks ?? {}), [library?.tracks])
   const folders = [...new Set(tracks.flatMap(track => track.path.includes('/') ? [track.path.slice(0, track.path.lastIndexOf('/'))] : []))].sort(naturalCompare)
   const artists = [...new Set(tracks.map(track => track.metadata.artist).filter(Boolean))].sort(naturalCompare)
@@ -107,7 +110,7 @@ export function App() {
       <div className="nav-section"><div className="nav-heading"><span>YOUR LIBRARIES</span><button className="icon-button" aria-label="Add library" onClick={() => chooseFolder()}><Plus size={16} /></button></div>
         {state.libraries.length ? state.libraries.map(item => <ContextActions key={item.id} label={`Actions for library ${item.name}`} className="library-nav" disabled={state.busy} items={[
           { label: 'Refresh library', run: () => { void scanLibrary(item.id) }, disabled: !item.connected || item.scanning || state.busy },
-          { label: 'Reconnect library', run: () => { if (item.kind === 'direct') void reconnect(item.id); else chooseFolder(item.id) }, disabled: state.busy },
+          { label: 'Reconnect library', run: () => { setSidebar(false); setPicker(false); setRecoveryRequest({ libraryId: item.id }) }, disabled: state.busy },
           ...(item.kind === 'direct' ? [{ label: 'Remove filename numbers…', run: () => { selectLibrary(item.id); setSidebar(false); setPicker(false); setRemoveNumbers({ libraryId: item.id }) }, disabled: !item.connected || item.scanning || !!item.scanError || !!item.syncRecovery || state.busy || !navigator.locks }] : []),
           { label: 'Remove library from app', run: () => { if (confirm(`Remove ${item.name} and its browser drafts? Music and playlist files stay untouched.`)) void forgetLibrary(item.id) }, disabled: state.busy, danger: true },
         ]}><button disabled={state.busy} aria-label={item.name} title={item.name} className={`nav-item ${library?.id === item.id ? 'current-library' : ''}`} onClick={() => { selectLibrary(item.id); setSidebar(false); setPicker(false) }}><FolderOpen size={17} /><span className="library-name">{item.name}</span><i className={`connection-dot ${item.connected ? 'connected' : ''}`} title={item.connected ? 'Connected' : 'Reselection required'} /></button><button className="icon-button ghost-button forget" disabled={state.busy} aria-label={`Forget ${item.name}`} data-tooltip={`Remove ${item.name} from the app; files stay untouched`} onClick={() => { if (confirm(`Forget ${item.name} and its locally stored drafts? Music and playlist files stay untouched.`)) void forgetLibrary(item.id) }}><X size={14} /></button></ContextActions>) : <p className="nav-empty">Add a music folder.</p>}
@@ -122,6 +125,7 @@ export function App() {
     </aside>)
   return <div ref={shell} style={{ '--sidebar-preferred-width': `${sidebarWidth}px` } as CSSProperties} className={`app ${collapsed && !mobile ? 'collapsed' : ''} ${lyricsOpen ? 'lyrics-open' : ''}`}>
     <AmbientController />
+    <AccessController />
     <input ref={element => { folderInput.current = element; if (element && capabilities.directoryInput) element.setAttribute('webkitdirectory', '') }} type="file" multiple className="sr-only" aria-label="Select library folder" onChange={event => { const files = Array.from(event.target.files ?? []); if (files.length) void openPortable(files, event.target.dataset.reconnect || undefined) }} />
     <input ref={fileInput} type="file" multiple className="sr-only" aria-label="Select library files" onChange={event => { const files = Array.from(event.target.files ?? []); if (files.length) void openPortable(files, event.target.dataset.reconnect || undefined) }} />
     {!mobile && <div className="sidebar-shell" id="desktop-navigation">
@@ -143,20 +147,20 @@ export function App() {
     <AmbientBackground workspace />
     <main className="main">
       <header className="topbar"><div className="breadcrumbs"><button className="icon-button ghost-button navigation-toggle" aria-label={mobile ? 'Toggle navigation' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={mobile ? sidebar : !collapsed} onClick={event => { event.currentTarget.focus(); if (mobile) setSidebar(!sidebar); else toggleCollapsed() }}>{collapsed && !mobile ? <ChevronRight size={20} /> : <ChevronRight className="collapse-chevron" size={20} />}</button><span>Workspace</span><ChevronRight size={14} /><strong>{library?.name ?? 'Welcome'}</strong></div><GlobalSearch /><div className="topbar-end"><span className="privacy-pill"><ShieldCheck size={14} />Music stays local</span><a className="privacy-pill source-pill" href="https://github.com/markdsilva/Meloark" target="_blank" rel="noopener noreferrer" aria-label="Open source (opens in a new tab)" data-tooltip="View Meloark on GitHub (opens in a new tab)"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.09 3.29 9.4 7.86 10.93.58.1.79-.25.79-.56v-2.14c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.95.1-.75.4-1.25.73-1.54-2.55-.29-5.23-1.28-5.23-5.69 0-1.26.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.18A11 11 0 0 1 12 6.07c.98 0 1.96.13 2.88.39 2.2-1.49 3.16-1.18 3.16-1.18.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.08 0 4.42-2.68 5.39-5.24 5.68.41.36.78 1.06.78 2.13v3.16c0 .31.21.67.79.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" /></svg><span>Open source</span></a><button className="icon-button status-help" aria-label="Browser capabilities" data-tooltip="Help and browser support" onClick={() => setHelp(true)}><HelpCircle size={19} /></button></div></header>
-      {state.storageError && <div className="storage-banner" role="status">{state.storageError}</div>}
+      {state.storageError && <div className="storage-banner" role="status"><span>{state.storageError}</span><button className="text-button" onClick={() => setRecoveryRequest({ storage: true })}>Storage options</button></div>}
       {state.notice && <div className="notice" role="status"><span>{state.notice}</span><button className="icon-button" aria-label="Dismiss message" onClick={() => notify(undefined)}><X size={16} /></button></div>}
-      <div className="guide-mobile-host" />
-      {!library ? <Welcome chooseFolder={() => chooseFolder()} chooseFiles={() => portablePicker(undefined, true)} help={() => setHelp(true)} direct={capabilities.directoryPicker} /> : <div className="workspace">
-        {!library.connected && <div className="reconnect-banner"><FolderOpen size={20} /><div><strong>Reconnect your music</strong><span>Your draft is here. File access needs to be restored before playback or saving.</span></div>{library.kind === 'direct' && <button className="button secondary" onClick={() => { void reconnect(library.id) }}>Grant access</button>}<button className="button primary" onClick={() => chooseFolder(library.id)}>Reselect folder</button><button className="button secondary" onClick={() => portablePicker(library.id, true)}>Reselect files</button></div>}
+      {!library ? <Welcome chooseFolder={() => chooseFolder()} chooseFiles={() => portablePicker(undefined, true)} help={() => setHelp(true)} quickStart={() => setQuickStart(true)} direct={capabilities.directoryPicker} /> : <div className="workspace">
+        {!library.connected && <div className="reconnect-banner"><FolderOpen size={20} /><div><strong>Reconnect your music</strong><span>Your draft is here. Restore file access for playback and artwork.</span></div><button className="button primary" onClick={() => setRecoveryRequest({ libraryId: library.id })}>Reconnect</button></div>}
+        {library.connected && state.accessIssues[library.id]?.intent === 'write' && <div className="reconnect-banner"><ShieldCheck size={20} /><div><strong>Saving needs folder access</strong><span>You can keep listening. Restore write access before saving or syncing.</span></div><button className="button primary" onClick={() => setRecoveryRequest({ libraryId: library.id })}>Restore saving access</button></div>}
         <section className={`collection-hero ${playlistMode ? 'playlist-hero' : ''}`}><Artwork blob={activeTracks.find(track => track.metadata.artwork)?.metadata.artwork} title={playlistMode ? session?.name ?? 'Playlist' : library.name} large /><div className="collection-heading"><h1>{state.view === 'albums' ? 'Albums' : playlistMode ? session?.name.replace(/\.m3u8$/i, '') ?? 'Playlist' : library.name}</h1><div className="collection-meta"><span>{activeTracks.length.toLocaleString()} tracks</span><i />{durationLabel(totalDuration)}<i /><span>{library.kind === 'direct' ? 'Direct access' : 'Portable mode'}</span></div></div>
         <div className="workspace-actions"><div>
           <span data-tooltip={playlistMode && !session?.entries.length ? 'Add tracks to play this playlist, or listen from All tracks' : undefined}><button className="hero-play" aria-label={playlistMode ? 'Play playlist' : 'Play library'} disabled={!library.connected || (playlistMode ? !session?.entries.length : !state.visibleTrackIds.length)} onClick={() => { if (playlistMode && session?.entries[0]) playPlaylistEntry(session.entries[0].id); else if (!playlistMode && state.visibleTrackIds[0]) playLibraryTrack(state.visibleTrackIds[0]) }}><Play size={23} fill="currentColor" /></button></span>
-          <button className="button secondary" data-tour="create" disabled={library.scanning || state.busy} onClick={() => setCreate(true)}><Plus size={17} />New playlist</button>
+          <button className="button secondary" disabled={library.scanning || state.busy} onClick={() => setCreate(true)}><Plus size={17} />New playlist</button>
           {playlistMode && <><button className="icon-button" aria-label="Undo" title="Undo (Ctrl/Cmd+Z)" disabled={!session?.undo.length || state.busy || session.status === 'unverified'} onClick={() => history('undo')}><Undo2 size={19} /></button><button className="icon-button" aria-label="Redo" title="Redo (Ctrl/Cmd+Shift+Z)" disabled={!session?.redo.length || state.busy || session.status === 'unverified'} onClick={() => history('redo')}><Redo2 size={19} /></button></>}
           <button className="icon-button" aria-label="Refresh library" disabled={!library.connected || state.busy || library.scanning} onClick={() => { void scanLibrary(library.id) }}><RefreshCw size={17} className={library.scanning ? 'spin' : ''} /></button>
           <button className="icon-button" aria-label="Remember libraries" title="Request persistent browser storage" onClick={() => { void navigator.storage?.persist?.().then(granted => notify(granted ? 'Persistent browser storage was granted. Keep saving or exporting playlist copies.' : 'Persistence was not granted. Saving and exporting still work.')).catch(() => notify('Persistent storage is unavailable in this browser.')) }}><HardDrive size={18} /></button>
           <AmbientToggle />
-        </div><div data-tour="save">{session && playlistMode && <>{session.sync ? <SyncControls removeNumbers={folder => setRemoveNumbers({ libraryId: library.id, folder })} /> : <span className={`save-status ${isDirty(session) ? 'unsaved' : ''}`}><i />{savedStatus}</span>}<button className="button secondary" disabled={state.busy || !!library.syncRecovery} onClick={exportPlaylist}><Download size={16} />Export</button>{!session.sync && library.kind === 'direct' && capabilities.userFileWriting && <button className="button primary" disabled={!library.connected || state.busy || !!library.syncRecovery || !isDirty(session) || !!session.document?.issues.length || session.entries.some(entry => entry.issue)} onClick={() => { void savePlaylist() }}>{state.busy ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}Save playlist</button>}</>}</div></div>
+        </div><div className="workspace-save">{session && playlistMode && <>{session.sync ? <SyncControls removeNumbers={folder => setRemoveNumbers({ libraryId: library.id, folder })} /> : <span className={`save-status ${isDirty(session) ? 'unsaved' : ''}`}><i />{savedStatus}</span>}<button className="button secondary" disabled={state.busy || !!library.syncRecovery} onClick={exportPlaylist}><Download size={16} />Export</button>{!session.sync && library.kind === 'direct' && capabilities.userFileWriting && <button className="button primary" disabled={!library.connected || state.busy || !!library.syncRecovery || !isDirty(session) || !!session.document?.issues.length || session.entries.some(entry => entry.issue)} onClick={() => { void savePlaylist() }}>{state.busy ? <LoaderCircle className="spin" size={16} /> : <Check size={16} />}Save playlist</button>}</>}</div></div>
         </section>
         {library.scanning && <div className="scan-status" role="status"><LoaderCircle className="spin" size={16} />Discovering your library… {tracks.length.toLocaleString()} tracks found<button className="text-button" onClick={() => cancelScan(library.id)}>Cancel</button></div>}
         {library.scanError && <div className="callout">{library.scanError}</div>}
@@ -177,10 +181,11 @@ export function App() {
     </main>
     {lyricsOpen && <Suspense fallback={null}><LyricsPanel /></Suspense>}
     <Player />
-    <BrowserSuggestion capabilities={capabilities} paused={help || create || !!removeNumbers || !!state.setupLibrary || sidebar || picker || lyricsOpen} details={() => setHelp(true)} />
-    <Guide />
+    <AccessRecovery requested={recoveryRequest} handled={() => setRecoveryRequest(undefined)} chooseFolder={chooseFolder} chooseFiles={id => portablePicker(id, true)} />
+    <BrowserSuggestion capabilities={capabilities} paused={help || quickStart || create || !!removeNumbers || !!state.setupLibrary || sidebar || picker || lyricsOpen} details={() => setHelp(true)} />
+    {quickStart && <QuickStart close={() => setQuickStart(false)} browserSupport={() => { setQuickStart(false); setHelp(true) }} />}
     <Tooltips />
-    {help && <CapabilityDialog capabilities={capabilities} close={() => setHelp(false)} tour={() => { setHelp(false); startGuide() }} />}
+    {help && <CapabilityDialog capabilities={capabilities} close={() => setHelp(false)} quickStart={() => { setHelp(false); setQuickStart(true) }} />}
     {removeNumbers && <RemoveFilenameNumbers key={removeNumbers.libraryId} libraryId={removeNumbers.libraryId} initialFolder={removeNumbers.folder} close={() => setRemoveNumbers(undefined)} />}
     {(create || state.setupLibrary === library?.id && !!library) && library && <CreatePlaylist key={library.id} setup={state.setupLibrary === library.id} close={() => { setCreate(false); useApp.setState({ setupLibrary: undefined }) }} />}
   </div>

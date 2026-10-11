@@ -6,7 +6,7 @@
 .player { position: relative; isolation: isolate; }
 .now-playing-sheet { isolation: isolate; }
 .player > .ambient-background { opacity: .55; }
-.topbar { background: color-mix(in srgb, var(--bg) 88%, transparent); }
+.topbar { background: color-mix(in srgb, var(--bg) 38%, transparent); backdrop-filter: blur(18px) brightness(.9); }
 .ambient-toggle.active { color: var(--accent-text); background: var(--accent-soft); }
 .ambient-toggle:hover:not(:disabled) { color: var(--accent-text); background: var(--control-on-hover); }
 .main, .track-scroll { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
@@ -21,7 +21,10 @@
 @keyframes ambient-arrive { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 767px) { .ambient-workspace { grid-column: 1 / -1; } .main { grid-column: 1; } }
 @media (prefers-reduced-motion: reduce) { .ambient-arriving { animation: none; } }
+@media (prefers-reduced-transparency: reduce) { .topbar { background: var(--bg); backdrop-filter: none; } }
+@supports not (backdrop-filter: blur(1px)) { .topbar { background: var(--bg); } .track-header { background: var(--surface); } }
 @media (forced-colors: active) {
+  .topbar { background: Canvas; backdrop-filter: none; }
   .ambient-background { display: none; }
   .lyrics-scroll { scrollbar-width: auto; mask-image: none; }
   .lyrics-scroll::-webkit-scrollbar { display: block; }

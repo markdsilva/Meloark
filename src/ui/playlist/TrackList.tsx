@@ -110,7 +110,7 @@ export function TrackList({ query, folder, artist, sortBy, playlist, countHost }
   }, [mobile, virtual])
   const visible = virtual.getVirtualItems()
   const visibleIds = JSON.stringify(visible.map(item => rows[item.index].trackId).filter((id): id is string => !!id))
-  useEffect(() => { if (library) prioritizeMetadata(library.id, JSON.parse(visibleIds) as string[]) }, [library?.id, visibleIds]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (library) prioritizeMetadata(library.id, JSON.parse(visibleIds) as string[]) }, [library?.id, library?.connected, library?.generation, visibleIds]) // eslint-disable-line react-hooks/exhaustive-deps
   const selectionKey = `${library?.id}/${playlist}/${session?.id}`
   useEffect(() => { setSelected(new Set()); anchor.current = 0 }, [selectionKey])
   const rowIds = useMemo(() => new Set(rows.map(row => row.id)), [rows])
@@ -154,7 +154,7 @@ export function TrackList({ query, folder, artist, sortBy, playlist, countHost }
   }
   const trackCount = `${rows.length.toLocaleString()} ${query || folder || artist ? 'matching ' : ''}tracks`
   if (!library) return null
-  return <section className="track-list" data-tour="tracks" aria-label={playlist ? 'Playlist tracks' : 'Library tracks'}>
+  return <section className="track-list" aria-label={playlist ? 'Playlist tracks' : 'Library tracks'}>
     {countHost && createPortal(trackCount, countHost)}
     {(!countHost || mobile || validSelected.size > 0 || playlist && !reorderable) && <div className={`selection-toolbar ${countHost && !mobile ? 'floating' : ''}`}>
       {validSelected.size > 0 ? <span>{validSelected.size} selected</span> : !countHost ? <span>{trackCount}</span> : null}

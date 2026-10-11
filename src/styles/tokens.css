@@ -47,6 +47,10 @@
   --space-5: 24px;
   --space-6: 32px;
   --shadow: 0 24px 60px #0006;
+  --popup-bg: color-mix(in srgb, var(--elevated) 70%, var(--surface));
+  --popup-border: color-mix(in srgb, var(--accent-text) 17%, var(--border));
+  --popup-shadow: 0 12px 36px #0005, 0 1px 4px #0003, inset 0 1px #ffffff05;
+  --popup-radius: 12px;
   --motion: 150ms ease;
   --navigation-motion: 240ms cubic-bezier(.22, 1, .36, 1);
 }
