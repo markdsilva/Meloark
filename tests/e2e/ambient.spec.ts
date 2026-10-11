@@ -85,8 +85,21 @@ test('the ambient toggle persists and reduced motion, mobile lyrics and menus re
   const toggle = page.getByRole('button', { name: 'Artwork backgrounds', exact: true })
   await toggle.click(); await expect(toggle).toHaveAttribute('aria-pressed', 'false')
   await expect.poll(() => primary(page)).toEqual([43, 33, 22])
-  await page.reload(); await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  // Library drafts use a debounced cache. Verify the reload prerequisite rather
+  // than racing its write (which can leave a legitimately empty Welcome page).
+  await expect.poll(() => page.evaluate(() => new Promise<number>((resolve, reject) => {
+    const request = indexedDB.open('trackindex-web', 3)
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const db = request.result, transaction = db.transaction('libraries'), records = transaction.objectStore('libraries').getAll()
+      records.onsuccess = () => resolve(records.result.reduce((count, library) => count + Object.keys(library.tracks).length, 0))
+      records.onerror = () => reject(records.error)
+      transaction.oncomplete = () => db.close()
+    }
+  }))).toBe(4)
+  await page.reload()
   await page.getByRole('dialog', { name: 'Reselect your music' }).getByRole('button', { name: 'Not now', exact: true }).click()
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
   await load(page, false)
   await page.getByRole('button', { name: 'Play Red', exact: true }).click()
   await expect.poll(() => primary(page)).toEqual([43, 33, 22])
