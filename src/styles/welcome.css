@@ -1,4 +1,4 @@
-.welcome { padding: clamp(28px, 5vw, 64px) clamp(20px, 4vw, 48px) 32px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 1fr auto; gap: 32px 40px; max-width: 1400px; margin: auto; }
+.welcome { padding: clamp(28px, 3vw, 32px) clamp(20px, 4vw, 48px) 32px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto; align-content: start; gap: 24px 40px; max-width: 1400px; margin: auto; }
 .welcome-copy { grid-column: 1; grid-row: 1; align-self: center; }
 .welcome h1 { font-size: clamp(36px, 3.8vw, 58px); line-height: 1.12; letter-spacing: -2px; font-weight: 700; margin: 0 0 24px; }
 .welcome h1 span { color: var(--accent-text); }
@@ -22,7 +22,7 @@
 .preview-track > span:last-child { margin-left: auto; color: var(--subtle); }
 .preview-bottom { display: flex; gap: 8px; align-items: center; padding: 18px 0; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
 .preview-bottom svg { color: var(--accent-text); }
-.welcome-help { grid-column: 1; grid-row: 2; align-self: end; padding-bottom: 55px; }
+.welcome-help { grid-column: 1; grid-row: 2; align-self: end; }
 .welcome-help:empty { display: none; }
 .welcome-help .quick-start-invitation { margin: 0; max-width: none; background: color-mix(in srgb, var(--surface) 88%, transparent); padding: 16px; }
 .feature-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
@@ -37,7 +37,6 @@
 @container (max-width: 850px) {
   .welcome { grid-template-columns: minmax(0, 1fr); gap: 28px; }
   .welcome-copy, .welcome-help { grid-column: 1; grid-row: auto; }
-  .welcome-help { padding-bottom: 0; }
   .welcome-preview { display: none; }
   .welcome h1 { font-size: clamp(36px, 6vw, 50px); }
 }

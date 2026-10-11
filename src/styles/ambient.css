@@ -15,8 +15,8 @@
 .topbar { background: color-mix(in srgb, var(--bg) 38%, transparent); backdrop-filter: blur(18px) brightness(.9); }
 .ambient-toggle.active { color: var(--accent-text); background: var(--accent-soft); }
 .ambient-toggle:hover:not(:disabled) { color: var(--accent-text); background: var(--control-on-hover); }
-.main, .track-scroll { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
-.main:hover, .main:focus-within, .track-scroll:hover, .track-scroll:focus-within { scrollbar-color: var(--subtle) transparent; }
+.main, .welcome, .track-scroll { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.main:hover, .main:focus-within, .welcome:hover, .welcome:focus-within, .track-scroll:hover, .track-scroll:focus-within { scrollbar-color: var(--subtle) transparent; }
 .lyrics-scroll { scrollbar-width: none; }
 .lyrics-scroll::-webkit-scrollbar { display: none; }
 .lyrics-panel::before, .lyrics-drawer::before { background: linear-gradient(145deg, #ffffff03, transparent 60%), color-mix(in srgb, var(--sidebar) 38%, transparent); }
