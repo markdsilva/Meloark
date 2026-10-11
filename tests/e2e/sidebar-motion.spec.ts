@@ -109,15 +109,18 @@ test('collapse crossfades stable content, tolerates rapid toggles and respects r
     const app = document.querySelector('.app')!, shell = document.querySelector('.sidebar-shell')!, content = document.querySelector('.sidebar-expanded')!
     const toggle = document.querySelector<HTMLButtonElement>('.navigation-toggle')!
     const frames: { width: number; content: number }[] = []
-    const began = performance.now()
-    toggle.click()
-    let expanded = false, collapsed = false
-    while (performance.now() - began < 650) {
-      await new Promise(requestAnimationFrame)
-      const elapsed = performance.now() - began
-      if (elapsed > 70 && !expanded) { toggle.click(); expanded = true }
-      if (elapsed > 160 && !collapsed) { toggle.click(); collapsed = true }
+    // Sample the actual CSS transition at controlled times: overloaded CI
+    // runners can skip every intermediate frame of a 240 ms transition.
+    void getComputedStyle(app).gridTemplateColumns
+    for (let reversal = 0; reversal < 3; reversal++) {
+      toggle.click()
+      await new Promise<void>(resolve => queueMicrotask(resolve))
+      const motion = app.getAnimations().find(animation => animation instanceof CSSTransition && animation.transitionProperty === 'grid-template-columns')
+      if (!motion?.effect) throw new Error('Sidebar width transition did not start')
+      motion.pause()
+      motion.currentTime = Number(motion.effect.getTiming().duration) / 2
       frames.push({ width: shell.getBoundingClientRect().width, content: content.getBoundingClientRect().width })
+      if (reversal === 2) motion.finish()
     }
     return { frames, collapsed: app.classList.contains('collapsed') }
   })

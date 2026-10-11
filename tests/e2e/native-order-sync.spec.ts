@@ -181,6 +181,13 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
     }))
     const original = await snapshot()
     const alpha = page.locator('.track-title').filter({ hasText: /^Alpha/ }), gamma = page.locator('.track-title').filter({ hasText: /^Gamma/ })
+    const selectForMove = async (row: import('@playwright/test').Locator) => {
+      // A second click now clears a sole selection. Preserve it when the
+      // previous drag/undo already left the intended row selected.
+      if (await row.getAttribute('aria-selected') !== 'true') await row.click()
+      await expect(row).toHaveAttribute('aria-selected', 'true')
+      await expect(page.locator('.track-row[aria-selected=true]')).toHaveCount(1)
+    }
     const from = (await alpha.boundingBox())!, to = (await gamma.boundingBox())!
     await page.mouse.move(from.x + 60, from.y + 20); await page.mouse.down(); await page.mouse.move(from.x + 60, from.y + 35, { steps: 3 }); await page.mouse.move(to.x + 60, to.y + 28, { steps: 10 }); await page.mouse.up()
     await expect(page.locator('.track-title strong')).toHaveText(['Beta', 'Gamma', 'Alpha'])
@@ -200,7 +207,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
     await page.getByRole('button', { name: 'Play', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible()
     await expect(page.locator('.now-playing strong')).toHaveText('Alpha')
-    await page.getByRole('row').filter({ has: alpha }).click()
+    await selectForMove(page.getByRole('row').filter({ has: alpha }))
     await page.getByRole('row').filter({ has: alpha }).press('Alt+ArrowDown')
     await expect.poll(async () => (await snapshot()).paths).toEqual([`${prefix(1)} - Beta.${codec}`, `${prefix(2)} - Alpha.${codec}`, `${prefix(3)} - Gamma.${codec}`])
     expect(await readFile(join(directory, `${prefix(2)} - Alpha.${codec}`))).toEqual(audio.get('Alpha'))
@@ -276,7 +283,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
         await expect(page.locator('.track-title strong')).toHaveText(order)
         if (expectedIds) expect((await snapshot()).ids).toEqual(expectedIds)
         const first = page.getByRole('row').filter({ has: page.locator('.track-title').filter({ hasText: new RegExp(`^${order[0]}`) }) })
-        await first.click(); await first.press('Alt+ArrowDown')
+        await selectForMove(first); await first.press('Alt+ArrowDown')
         await expect(page.locator('.track-title strong')).toHaveText([order[1], order[0], order[2]])
         // Subsequent draft edits no longer number files or rewrite the M3U8.
         expect(await readFile(join(directory, authorityFile), 'utf-8')).toBe(`#EXTM3U\n${order.map(name => `${name}.${codec}\n`).join('')}`)
@@ -292,7 +299,7 @@ for (const numbered of [false, true]) test(`native folder rename ${numbered ? 'n
       source.moveFile = async (from: string, to: string) => { await original(from, to); throw new Error('Simulated interruption after native move') }
     })
     const first = page.getByRole('row').filter({ has: page.locator('.track-title').filter({ hasText: /^Beta/ }) })
-    await first.click(); await first.press('Alt+ArrowDown')
+    await selectForMove(first); await first.press('Alt+ArrowDown')
     await expect(page.getByRole('alert')).toContainText('Simulated interruption after native move')
     expect((await readdir(directory)).some(name => name.startsWith('.meloark-') && name !== '.meloark-order-sync.json')).toBe(true)
     // This scenario recovers a persisted draft. Flush the debounced browser save
