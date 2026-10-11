@@ -145,7 +145,10 @@ export function TrackList({ query, folder, artist, sortBy, playlist, countHost }
     } else if (event.ctrlKey || event.metaKey || (mobile && selecting) || ('key' in event && event.key === ' ')) {
       const next = new Set(validSelected); if (next.has(row.id)) next.delete(row.id); else next.add(row.id)
       setSelected(next); anchor.current = index
-    } else { setSelected(new Set([row.id])); anchor.current = index }
+    } else {
+      const clearSingleSelection = !('key' in event) && validSelected.size === 1 && validSelected.has(row.id)
+      setSelected(clearSingleSelection ? new Set() : new Set([row.id])); anchor.current = index
+    }
   }
   function move(offset: number) {
     if (!session || !validSelected.size) return

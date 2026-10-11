@@ -37,7 +37,7 @@
   .dialog:is(.lyrics-drawer, .now-playing-sheet) { background: var(--surface); }
   .track-row:is(:hover, :focus-within):not(.selected) { background: var(--surface); }
 }
-@supports not (backdrop-filter: blur(1px)) { .topbar { background: var(--bg); } .track-header { background: var(--surface); } }
+@supports not (backdrop-filter: blur(1px)) { .topbar { background: var(--bg); } .track-header, .selection-toolbar.floating { background: var(--surface); } }
 @media (forced-colors: active) {
   .topbar { background: Canvas; backdrop-filter: none; }
   .ambient-background { display: none; }

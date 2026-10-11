@@ -82,6 +82,37 @@ test('desktop workspace stays fixed while tracks scroll and filters use the avai
   await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeInViewport()
 })
 
+test('clicking the sole selected row clears selection in playlists and All tracks without shifting rows', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 }); await library(page)
+  const a = trackRow(page, 'Alpha'), b = trackRow(page, 'Beta')
+  for (const view of ['Active playlist', 'All tracks']) {
+    await page.getByRole('button', { name: view, exact: true }).click()
+    const top = (await a.boundingBox())!.y
+    await a.click(); await expect(a).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByText('1 selected', { exact: true })).toBeVisible()
+    const alpha = await page.locator('.selection-toolbar.floating').evaluate(element => {
+      const context = document.createElement('canvas').getContext('2d')!
+      context.fillStyle = getComputedStyle(element).backgroundColor; context.fillRect(0, 0, 1, 1)
+      return context.getImageData(0, 0, 1, 1).data[3]
+    })
+    expect(alpha).toBeGreaterThan(0); expect(alpha).toBeLessThan(255)
+    if (view === 'Active playlist') await page.screenshot({ path: 'test-results/selection-toolbar-glass.png' })
+    await a.click(); await expect(a).toHaveAttribute('aria-selected', 'false')
+    await expect(page.locator('.selection-toolbar')).toHaveCount(0)
+    await expect(page.getByRole('columnheader', { name: 'Title', exact: true })).toBeVisible()
+    expect((await a.boundingBox())!.y).toBe(top)
+    await a.focus(); await a.press('Space'); await a.press('ArrowUp')
+    await expect(a).toHaveAttribute('aria-selected', 'true')
+    await b.click({ modifiers: ['ControlOrMeta'] }); await expect(page.getByText('2 selected', { exact: true })).toBeVisible()
+    await a.click(); await expect(a).toHaveAttribute('aria-selected', 'true')
+    await expect(b).toHaveAttribute('aria-selected', 'false')
+    await a.click(); await expect(page.locator('.track-row[aria-selected=true]')).toHaveCount(0)
+  }
+  await b.dblclick()
+  await expect(page.locator('.now-playing strong')).toHaveText('Beta')
+  await expect(page.getByRole('contentinfo').getByRole('button', { name: 'Pause', exact: true })).toBeVisible()
+})
+
 test('row selection supports modifiers, Space and ranges without starting playback', async ({ page }) => {
   // Keep all fixture rows in view so ordinary scroll-to-click is distinct
   // from a selection toolbar changing the row layout.
