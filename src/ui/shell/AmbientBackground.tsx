@@ -18,12 +18,12 @@ export function AmbientController() {
 function colors(palette: Palette): CSSProperties {
   return { '--ambient-primary': `rgb(${palette.primary.join(' ')})`, '--ambient-secondary': `rgb(${palette.secondary.join(' ')})` } as CSSProperties
 }
-export function AmbientBackground({ workspace = false }: { workspace?: boolean }) {
+export function AmbientBackground({ shell = false }: { shell?: boolean }) {
   const { from, to, revision, changedAt } = useAmbient()
   // Newly opened drawers join the shared fade instead of replaying old colors.
   // Keep this delay stable across unrelated renders of the same transition.
   const delay = useMemo(() => revision ? -Math.min(fadeDuration, Math.max(0, performance.now() - changedAt)) : 0, [revision, changedAt])
-  return <div className={`ambient-background ${workspace ? 'ambient-workspace' : ''}`} aria-hidden="true">
+  return <div className={`ambient-background ${shell ? 'ambient-shell' : ''}`} aria-hidden="true">
     <div className="ambient-layer" style={colors(from)} />
     <div key={revision} className="ambient-layer ambient-arriving" style={{ ...colors(to), animationDelay: `${delay}ms` }} />
   </div>

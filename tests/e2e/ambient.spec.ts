@@ -19,13 +19,13 @@ async function load(page: Page, navigate = true) {
   await expect(page.locator('.track-title strong')).toHaveText(['Blue', 'Invalid', 'Missing', 'Red'])
   await expect(page.locator('.track-row').filter({ has: page.getByRole('button', { name: 'Play Blue', exact: true }) }).locator('.artwork img')).toBeAttached()
 }
-const stage = (page: Page) => page.locator('.ambient-workspace .ambient-arriving')
+const stage = (page: Page) => page.locator('.ambient-shell .ambient-arriving')
 async function primary(page: Page) { return stage(page).evaluate(element => element.style.getPropertyValue('--ambient-primary').match(/[\d.]+/g)!.map(Number)) }
 async function settle(page: Page) { await expect(stage(page)).toHaveCSS('opacity', '1') }
 
-test('artwork colors fade across the workspace and lyrics while playback and search stay independent', async ({ page }) => {
+test('artwork colors fade across the whole app and dialogs while playback and search stay independent', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 }); await load(page)
-  const sidebar = page.locator('.sidebar-shell'), before = await sidebar.evaluate(element => getComputedStyle(element).backgroundColor)
+  const sidebar = page.locator('.sidebar-shell'), foreground = await page.locator('.brand-mark').first().evaluate(element => getComputedStyle(element).color)
   const toggle = page.getByRole('button', { name: 'Artwork backgrounds', exact: true })
   await expect(toggle).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('button', { name: 'Play Red', exact: true }).click()
@@ -36,12 +36,37 @@ test('artwork colors fade across the workspace and lyrics while playback and sea
   await page.getByRole('contentinfo').getByRole('slider', { name: 'Seek', exact: true }).fill('8')
   expect(await primary(page)).toEqual(palette)
   expect(await layer!.evaluate(element => element.isConnected)).toBe(true)
-  expect(await sidebar.evaluate(element => getComputedStyle(element).backgroundColor)).toBe(before)
+  // The continuous layer reaches the sidebar and bottom player; each has a
+  // translucent dimming surface while text and amber controls stay stable.
+  const appBounds = await page.locator('.app').boundingBox()
+  expect(await page.locator('.ambient-shell').boundingBox()).toEqual(appBounds)
+  for (const surface of [sidebar, page.getByRole('contentinfo')]) {
+    const alpha = await surface.evaluate(element => {
+      const canvas = document.createElement('canvas'), context = canvas.getContext('2d')!
+      context.fillStyle = getComputedStyle(element).backgroundColor; context.fillRect(0, 0, 1, 1)
+      return context.getImageData(0, 0, 1, 1).data[3]
+    })
+    expect(alpha).toBeGreaterThan(0); expect(alpha).toBeLessThan(255)
+  }
+  expect(await page.locator('.brand-mark').first().evaluate(element => getComputedStyle(element).color)).toBe(foreground)
+  await expect(page.locator('.player > .ambient-background')).toHaveCount(0)
+  const row = page.locator('.track-row').filter({ has: page.getByRole('button', { name: 'Play Blue', exact: true }) })
+  await row.hover()
+  const hoverAlpha = await row.evaluate(element => {
+    const context = document.createElement('canvas').getContext('2d')!
+    context.fillStyle = getComputedStyle(element).backgroundColor; context.fillRect(0, 0, 1, 1)
+    return context.getImageData(0, 0, 1, 1).data[3]
+  })
+  expect(hoverAlpha).toBeGreaterThan(0); expect(hoverAlpha).toBeLessThan(40)
+  await row.click(); await expect(row).toHaveAttribute('aria-selected', 'true')
+  await expect(row).toHaveCSS('background-color', 'rgb(45, 36, 25)')
+  await row.press('Escape')
   await page.getByRole('contentinfo').getByRole('button', { name: 'Lyrics', exact: true }).click()
   await expect(page.locator('.lyric-line.current')).toHaveText('A second line')
   await expect(page.locator('.lyric-line.current')).toHaveCSS('color', 'rgb(227, 175, 108)')
   expect(await page.locator('.lyric-line.current').evaluate(element => getComputedStyle(element, '::before').content)).toBe('none')
   await expect(page.locator('.lyrics-scroll')).toHaveCSS('scrollbar-width', 'none')
+  await row.hover()
   await page.screenshot({ path: 'test-results/ambient-red-desktop.png' })
   // Lyrics narrow the main area enough to use the compact search overlay.
   await page.keyboard.press('Control+k')
@@ -57,7 +82,14 @@ test('artwork colors fade across the workspace and lyrics while playback and sea
   await page.getByRole('contentinfo').getByRole('button', { name: 'Pause', exact: true }).click()
   await page.getByRole('contentinfo').getByRole('slider', { name: 'Seek', exact: true }).fill('0')
   await expect(page.locator('.lyric-line.current')).toContainText('Cool tones, warm words')
+  await page.locator('.track-row').filter({ has: page.getByRole('button', { name: 'Play Missing', exact: true }) }).hover()
   await page.screenshot({ path: 'test-results/ambient-blue-desktop.png' })
+  await page.getByRole('button', { name: 'New playlist', exact: true }).click()
+  const setup = page.getByRole('dialog', { name: 'Create a playlist', exact: true })
+  await expect(setup.locator('.ambient-background')).toHaveCount(1)
+  expect(await setup.locator('.ambient-arriving').evaluate(element => getComputedStyle(element).opacity)).toBe('1')
+  expect(await setup.locator('.ambient-arriving').evaluate(element => element.style.getPropertyValue('--ambient-primary'))).toBe(await stage(page).evaluate(element => element.style.getPropertyValue('--ambient-primary')))
+  await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 390, height: 844 })
   const drawer = page.getByRole('dialog', { name: 'Lyrics', exact: true })
   await expect(drawer).toBeVisible()
@@ -71,7 +103,7 @@ test('artwork colors fade across the workspace and lyrics while playback and sea
   await page.getByRole('button', { name: 'Play Missing', exact: true }).click()
   await expect.poll(() => primary(page)).toEqual([43, 33, 22])
   await settle(page)
-  await expect(page.locator('.ambient-workspace .ambient-layer')).toHaveCount(2)
+  await expect(page.locator('.ambient-shell .ambient-layer')).toHaveCount(2)
   await page.getByRole('button', { name: 'Play Invalid', exact: true }).click()
   await expect.poll(() => primary(page)).toEqual([43, 33, 22])
   await page.getByRole('contentinfo').getByRole('button', { name: 'Pause', exact: true }).click()
@@ -116,8 +148,16 @@ test('the ambient toggle persists and reduced motion, mobile lyrics and menus re
   await page.getByRole('contentinfo').getByRole('button', { name: 'Expand player', exact: true }).click()
   await expect(page.getByRole('dialog', { name: 'Now playing', exact: true }).getByRole('slider', { name: 'Seek', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click()
+  const navigation = page.getByRole('dialog', { name: 'Navigation', exact: true })
+  await expect(navigation.locator('.ambient-background')).toHaveCount(1)
+  expect(await navigation.locator('.ambient-arriving').evaluate(element => element.style.getPropertyValue('--ambient-primary'))).toBe(await stage(page).evaluate(element => element.style.getPropertyValue('--ambient-primary')))
+  await navigation.getByRole('button', { name: 'Close dialog', exact: true }).click()
   for (const [width, height] of [[320, 700], [720, 450], [1024, 768]]) {
     await page.setViewportSize({ width, height })
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
   }
+  await page.emulateMedia({ forcedColors: 'active' })
+  await expect(page.locator('.ambient-shell')).toBeHidden()
+  await expect(page.getByRole('button', { name: 'New playlist', exact: true })).toBeVisible()
 })

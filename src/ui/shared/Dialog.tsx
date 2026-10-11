@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { create } from 'zustand'
+import { AmbientBackground } from '../shell/AmbientBackground'
 export const useDialogCount = create<{ count: number }>(() => ({ count: 0 }))
 export function Dialog({ title, children, close, wide = false, className = '' }: { title: string; children: ReactNode; close: () => void; wide?: boolean; className?: string }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -21,6 +22,7 @@ export function Dialog({ title, children, close, wide = false, className = '' }:
     const rect = event.currentTarget.getBoundingClientRect()
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close()
   }}>
+    <AmbientBackground />
     <div className="dialog-heading"><h2 id={id}>{title}</h2><button className="icon-button" onClick={close} aria-label="Close dialog"><X size={20} /></button></div>
     {children}
   </dialog>
