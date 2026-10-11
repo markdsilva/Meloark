@@ -7,7 +7,7 @@ export function BrowseTabs({ playlist, available, change }: { playlist: boolean;
     update(); const observer = new ResizeObserver(update); if (ref.current) observer.observe(ref.current)
     return () => observer.disconnect()
   }, [playlist])
-  return <div ref={ref} className="browse-tabs" role="tablist" aria-label="Track views" data-tour="tabs" onKeyDown={event => {
+  return <div ref={ref} className="browse-tabs" role="tablist" aria-label="Track views" onKeyDown={event => {
     if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
       event.preventDefault(); const next = event.key === 'Home' ? false : event.key === 'End' ? available : available ? !playlist : false
       change(next ? 'playlist' : 'library'); ref.current?.querySelector<HTMLButtonElement>(next ? '#tab-playlist' : '#tab-library')?.focus()

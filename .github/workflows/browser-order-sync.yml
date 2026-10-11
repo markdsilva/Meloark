@@ -1,0 +1,48 @@
+name: Meloark browser checks
+
+on:
+  push:
+    branches: [main, feat/browser-order-sync, feat/ui-overhaul]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MELOARK_CHROMIUM_EXECUTABLE: /usr/bin/google-chrome
+      MELOARK_NATIVE_SYNC_TEST: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint && npm run typecheck && npm test && npm run build && npm run check:seo
+      - name: Check installed native Chromium
+        run: google-chrome --version
+      - name: Native dialog test helpers
+        run: sudo apt-get update && sudo apt-get install -y xdotool imagemagick openbox ffmpeg
+      - name: Browser flows and disposable native-file sync
+        run: npm run test:e2e -- --project=chromium --grep-invert='native folder rename' --output=test-results/browser
+      - name: Native folder sync on an isolated display
+        if: ${{ !cancelled() }}
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1200x24' sh -c 'openbox >/tmp/meloark-window-manager.log 2>&1 & npm run test:e2e -- tests/e2e/native-order-sync.spec.ts --project=chromium --workers=1 --output=test-results/native'
+      - name: Built static assets for the Cloudflare preview
+        if: ${{ !cancelled() }}
+        run: MELOARK_TEST_BUILD=1 npm run test:e2e -- tests/e2e/production-smoke.spec.ts tests/e2e/global-search.spec.ts tests/e2e/ambient.spec.ts tests/e2e/ui-overhaul.spec.ts tests/e2e/access-recovery.spec.ts tests/e2e/guidance.spec.ts --project=chromium --output=test-results/production
+      - name: Native sync from the production bundle
+        if: ${{ !cancelled() }}
+        run: MELOARK_TEST_BUILD=1 xvfb-run --auto-servernum --server-args='-screen 0 1920x1200x24' sh -c 'openbox >/tmp/meloark-production-window-manager.log 2>&1 & npm run test:e2e -- tests/e2e/native-order-sync.spec.ts --project=chromium --workers=1 --output=test-results/production-native'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-order-sync-results
+          path: test-results/
+          retention-days: 7

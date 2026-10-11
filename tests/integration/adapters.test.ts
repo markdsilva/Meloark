@@ -3,6 +3,8 @@ import { PortableSource } from '../../src/platform/filesystem/portable'
 import { DirectSource } from '../../src/platform/filesystem/direct'
 import type { DirectoryHandle } from '../../src/platform/filesystem/types'
 import { File as NodeFile } from 'node:buffer'
+import { webcrypto } from 'node:crypto'
+import { JOURNAL_PATH } from '../../src/domain/orderSync'
 const file = (name: string, relative: string) => {
   const file = new File(['audio'], name)
   Object.defineProperty(file, 'webkitRelativePath', { value: relative })
@@ -27,6 +29,26 @@ describe('portable adapter', () => {
   })
 })
 describe('direct adapter boundaries', () => {
+  it('has a narrow verified sync-write path while ordinary Save stays M3U8-only', async () => {
+    vi.stubGlobal('crypto', webcrypto)
+    const files = new Map<string, Uint8Array>()
+    const root = { name: 'Music', queryPermission: async () => 'granted', getFileHandle: async (name: string, options?: { create?: boolean }) => {
+      if (!files.has(name) && !options?.create) throw new DOMException('Missing', 'NotFoundError')
+      if (!files.has(name)) files.set(name, new Uint8Array())
+      return { getFile: async () => new NodeFile([new Uint8Array(files.get(name)!)], name), createWritable: async () => {
+        let staged = new Uint8Array()
+        return { write: async (bytes: ArrayBuffer) => { staged = new Uint8Array(bytes) }, close: async () => { files.set(name, staged) }, abort: async () => {} }
+      } }
+    } } as unknown as DirectoryHandle
+    const source = new DirectSource(root), bytes = new TextEncoder().encode('verified payload')
+    for (const path of [JOURNAL_PATH, 'Legacy.m3u']) {
+      await expect(source.writePlaylist(path, bytes, null)).rejects.toThrow(/M3U8/)
+      await source.writeSyncFile(path, bytes, null)
+      expect([...files.get(path)!]).toEqual([...bytes])
+    }
+    for (const path of ['Song.mp3', '../Legacy.m3u', '.another-journal.json']) await expect(source.writeSyncFile(path, bytes, null)).rejects.toThrow()
+    expect([...files.keys()]).toEqual([JOURNAL_PATH, 'Legacy.m3u'])
+  })
   it('deletes only a verified playlist file without recursive removal', async () => {
     let disk: File | undefined = new NodeFile(['#EXTM3U\n'], 'List.m3u8') as unknown as File
     const expected = new Uint8Array(await disk.arrayBuffer())

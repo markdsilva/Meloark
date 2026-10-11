@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { FileMusic, Settings2 } from 'lucide-react'
+import { FileMusic, Plus, Settings2 } from 'lucide-react'
 import { exportPlaylist, inspectPlaylistDeletion, deletePlaylistFile, playlistPaths, playlistSession, removePlaylistFromApp, restorePlaylist, savePlaylist, sources, useApp, type Library } from '../../app/store'
 import { isDirty } from '../../domain/models'
 import { ContextActions, type MenuAction } from '../shared/Menu'
 import { Dialog } from '../shared/Dialog'
 import { UnverifiedDeleteError } from '../../platform/filesystem/deleteProtocol'
 
-export function PlaylistNavigation({ library, open }: { library: Library; open: (path: string) => Promise<boolean> }) {
+export function PlaylistNavigation({ library, open, create }: { library: Library; open: (path: string) => Promise<boolean>; create: () => void }) {
   const busy = useApp(s => s.busy), view = useApp(s => s.view)
   const [manage, setManage] = useState(false)
   const [operation, setOperation] = useState<{ path: string; action: 'remove' | 'delete' }>()
@@ -41,23 +41,27 @@ export function PlaylistNavigation({ library, open }: { library: Library; open: 
     } finally { setLoading(false) }
   }
   return <>
+    <div className="nav-heading"><span>PLAYLISTS</span><div className="nav-heading-actions">
+      <button className="icon-button" aria-label="Manage playlists" data-tooltip="Manage playlists" disabled={busy} onClick={() => setManage(true)}><Settings2 size={16} /></button>
+      <button className="icon-button" aria-label="Create playlist" data-tooltip="Create playlist" disabled={library.scanning || busy} onClick={create}><Plus size={16} /></button>
+    </div></div>
     {paths.map(path => {
       const session = playlistSession(library, path), active = view === 'playlist' && library.activePlaylist === session?.id
       const onDisk = library.playlists.includes(path)
-      const canDelete = library.connected && onDisk && !!source?.deletePlaylist && source.canDeletePlaylists !== false
+      const canDelete = library.connected && onDisk && !session?.sync && !library.syncRecovery && !!source?.deletePlaylist && source.canDeletePlaylists !== false
       const items: MenuAction[] = [
         { label: 'Open', run: () => { void open(path) }, disabled: !library.connected && !session },
-        { label: 'Save playlist', run: () => { void open(path).then(success => { if (success) void savePlaylist() }) }, disabled: !session || library.kind !== 'direct' || !library.connected || busy || session.status === 'unverified' },
+        ...(!session?.sync ? [{ label: 'Save playlist', run: () => { void open(path).then(success => { if (success) void savePlaylist() }) }, disabled: !session || library.kind !== 'direct' || !library.connected || busy || !!library.syncRecovery || session.status === 'unverified' }] : []),
         { label: 'Export', run: () => { void open(path).then(success => { if (success) exportPlaylist() }) }, disabled: !session || busy },
-        { label: onDisk ? 'Remove from app' : 'Discard draft', run: () => { if (session && (isDirty(session) || session.undo.length || session.redo.length)) setOperation({ path, action: 'remove' }); else removePlaylistFromApp(path) }, disabled: busy || library.scanning },
+        { label: onDisk ? 'Remove from app' : 'Discard draft', run: () => { if (session && (isDirty(session) || session.undo.length || session.redo.length)) setOperation({ path, action: 'remove' }); else removePlaylistFromApp(path) }, disabled: busy || library.scanning || !!session?.sync || !!library.syncRecovery, reason: 'Disable filename sync before removing this playlist' },
         { label: 'Delete playlist file', run: () => setOperation({ path, action: 'delete' }), disabled: !canDelete || busy || library.scanning, reason: !onDisk ? 'This draft has no file to delete' : library.kind === 'portable' ? 'Use your file manager in portable mode' : !library.connected ? 'Reconnect the library first' : 'Direct file deletion is unavailable', danger: true },
       ]
-      return <ContextActions key={path} label={`Actions for playlist ${path}`} items={items} className="playlist-row" disabled={busy}>
-        <button className={`nav-item ${active ? 'active' : ''}`} aria-label={session?.name ?? path.split('/').at(-1)} data-tooltip={session?.sourcePath && session.sourcePath !== path ? `${path} · imported from ${session.sourcePath}` : path} aria-current={active ? 'page' : undefined} onClick={() => { void open(path) }} disabled={busy || !library.connected && !session}><FileMusic size={16} /><span className="library-name">{session?.name ?? path.split('/').at(-1)}</span>{session && isDirty(session) && <span className="draft-dot" title="Unsaved draft" />}</button>
+      const label = session?.sync?.mode === 'filenames' ? session.name : path
+      return <ContextActions key={path} label={`Actions for playlist ${label}`} items={items} className="playlist-row" disabled={busy}>
+        <button className={`nav-item ${active ? 'active' : ''}`} aria-label={session?.name ?? path.split('/').at(-1)} data-tooltip={session?.sync?.mode === 'filenames' ? `${session.sync.folder || 'Library root'} · numbered filenames only` : session?.sourcePath && session.sourcePath !== path ? `${path} · imported from ${session.sourcePath}` : path !== (session?.name ?? path.split('/').at(-1)) ? path : undefined} aria-current={active ? 'page' : undefined} onClick={() => { void open(path) }} disabled={busy || !library.connected && !session}><FileMusic size={16} /><span className="library-name">{session?.name ?? path.split('/').at(-1)}</span>{session && isDirty(session) && <span className="draft-dot" data-tooltip={session.sync ? 'Sync pending' : 'Unsaved draft'} />}</button>
       </ContextActions>
     })}
-    {!paths.length && <p className="nav-empty">Your playlists will appear here.</p>}
-    <button className="text-button manage-playlists" disabled={busy} onClick={() => setManage(true)}><Settings2 size={15} />Manage playlists</button>
+    {!paths.length && <p className="nav-empty">No playlists yet.</p>}
     {manage && <Dialog title="Manage playlists" close={() => setManage(false)}><p className="dialog-intro">Removing a playlist from the app leaves its file in your library. Restore hidden playlists here.</p>
       {!(library.hiddenPlaylists?.length) && <p className="muted">No hidden playlists.</p>}
       {library.hiddenPlaylists?.map(path => <div className="manage-playlist-row" key={path}><span>{path}{!library.playlists.includes(path) && <small>Not found in the current inventory</small>}</span><button className="button secondary" disabled={busy} onClick={() => restorePlaylist(path)}>Restore</button></div>)}

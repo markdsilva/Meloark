@@ -1,5 +1,6 @@
 import { normalizeRelative } from '../../playlists/paths'
 import type { WriteReceipt } from './types'
+import { JOURNAL_PATH } from '../../domain/orderSync'
 
 export class ConflictError extends Error {}
 export class UnverifiedWriteError extends Error {}
@@ -17,6 +18,15 @@ export async function hashBytes(bytes: Uint8Array): Promise<string> {
 }
 export async function verifiedWrite(path: string, bytes: Uint8Array, expected: Uint8Array | null, target: SaveTarget): Promise<WriteReceipt> {
   if (normalizeRelative(path) !== path || !path.toLowerCase().endsWith('.m3u8')) throw new Error('Only library-relative M3U8 targets may be written.')
+  return writeVerified(bytes, expected, target)
+}
+// Deliberately separate from ordinary Save: reference repair may update a legacy
+// M3U, and recovery may write exactly one reserved journal path.
+export async function verifiedSyncWrite(path: string, bytes: Uint8Array, expected: Uint8Array | null, target: SaveTarget): Promise<WriteReceipt> {
+  if (normalizeRelative(path) !== path || (path !== JOURNAL_PATH && !/\.m3u8?$/i.test(path))) throw new Error('Sync writes are limited to playlist references and the recovery journal.')
+  return writeVerified(bytes, expected, target)
+}
+async function writeVerified(bytes: Uint8Array, expected: Uint8Array | null, target: SaveTarget): Promise<WriteReceipt> {
   if (!equalBytes(await target.read(), expected)) throw new ConflictError('The playlist changed outside Meloark. Reload it or export a copy; the file was not overwritten.')
   const stream = await target.open()
   let closeStarted = false

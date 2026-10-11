@@ -1,6 +1,7 @@
+import { trackRow } from './helpers/ui'
 import { test, expect } from '@playwright/test'
 import { wavSample } from '../fixtures/audio'
-test('touch selection and handle dragging move a group without requiring hover', async ({ browser }, info) => {
+test('touch selection and row dragging move a group in explicit reorder mode', async ({ browser }, info) => {
   test.skip(info.project.name !== 'chromium', 'Native touch-event injection is provided by Chromium CDP; real mobile devices remain manual checks.')
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
   try {
@@ -10,14 +11,13 @@ test('touch selection and handle dragging move a group without requiring hover',
       { name: 'Touch.m3u8', mimeType: 'audio/x-mpegurl', buffer: Buffer.from('#EXTM3U\nA.wav\nB.wav\nC.wav\n') },
     ])
     await page.getByRole('button', { name: 'Select tracks', exact: true }).tap()
-    await page.getByRole('checkbox', { name: 'Select A', exact: true }).locator('..').tap()
-    await page.getByRole('checkbox', { name: 'Select B', exact: true }).locator('..').tap()
+    await trackRow(page, 'A').locator('.track-title').tap()
+    await trackRow(page, 'B').locator('.track-title').tap()
     await expect(page.getByText('2 selected', { exact: true })).toBeVisible()
     await page.locator('.main').evaluate(element => { element.scrollTop = element.scrollHeight })
-    const target = page.getByRole('button', { name: 'Reorder C', exact: true })
-    const from = await page.getByRole('button', { name: 'Reorder A', exact: true }).boundingBox(), to = await target.boundingBox()
-    expect(from!.width).toBeGreaterThanOrEqual(44)
-    expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label'), { x: from!.x + 20, y: from!.y + 20 })).toBe('Reorder A')
+    await page.getByRole('button', { name: 'Reorder tracks', exact: true }).tap()
+    const target = page.locator('.track-title').filter({ hasText: /^C/ })
+    const from = await page.locator('.track-title').filter({ hasText: /^A/ }).boundingBox(), to = await target.boundingBox()
     const cdp = await context.newCDPSession(page)
     const send = (type: 'touchStart' | 'touchEnd' | 'touchMove', x: number, y: number) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, radiusX: 2, radiusY: 2 }] })
     await send('touchStart', from!.x + 20, from!.y + 20)

@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react'
-import { Pause, Play, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX, LoaderCircle, ChevronUp, MoreHorizontal, MessageSquareText } from 'lucide-react'
+import { Pause, Play, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX, LoaderCircle, ChevronUp, ChevronDown, MoreHorizontal, MessageSquareText } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { usePlayer, player } from '../../playback/player'
 import { togglePlayback, useApp } from '../../app/store'
@@ -15,13 +15,13 @@ import { toggleLyrics, useLyrics } from '../../lyrics/store'
 function Volume() {
   const volume = usePlayer(s => s.volume), muted = usePlayer(s => s.muted)
   const [capabilities] = useState(detectCapabilities)
-  return <div className="volume"><button className={`icon-button toggle-button ${muted ? 'active' : ''}`} aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={muted} title={muted ? 'Unmute' : 'Mute'} onClick={() => player.mute()}>{muted ? <VolumeX size={20} /> : <Volume2 size={20} />}</button>
+  return <div className="volume"><button className={`icon-button toggle-button ${muted ? 'active' : ''}`} aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={muted} onClick={() => player.mute()}>{muted ? <VolumeX size={20} /> : <Volume2 size={20} />}</button>
     {capabilities.volumeControl ? <input className="player-range volume-range" style={{ '--range-fill': `${volume * 100}%` } as CSSProperties} aria-label="Volume" type="range" min="0" max="1" step="0.01" value={volume} onChange={event => player.setVolume(Number(event.target.value))} /> : <small>Use your device’s volume controls</small>}</div>
 }
 export function Toggles() {
   const shuffle = usePlayer(s => s.shuffle), repeat = usePlayer(s => s.repeat)
-  return <><button className={`icon-button toggle-button ${shuffle ? 'active' : ''}`} aria-label="Shuffle" aria-pressed={shuffle} title={`Shuffle ${shuffle ? 'on' : 'off'}`} onClick={() => player.shuffle()}><Shuffle size={20} /></button>
-    <button className={`icon-button toggle-button ${repeat !== 'off' ? 'active' : ''}`} aria-label={`Repeat: ${repeat}`} aria-pressed={repeat !== 'off'} title={`Repeat ${repeat}`} onClick={() => player.repeat()}>{repeat === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}</button></>
+  return <><button className={`icon-button toggle-button ${shuffle ? 'active' : ''}`} aria-label="Shuffle" aria-pressed={shuffle} data-tooltip={`Shuffle ${shuffle ? 'on' : 'off'}`} onClick={() => player.shuffle()}><Shuffle size={20} /></button>
+    <button className={`icon-button toggle-button ${repeat !== 'off' ? 'active' : ''}`} aria-label={`Repeat: ${repeat}`} aria-pressed={repeat !== 'off'} data-tooltip={`Repeat ${repeat}`} onClick={() => player.repeat()}>{repeat === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}</button></>
 }
 export function Transport({ previous = true }: { previous?: boolean }) {
   const current = usePlayer(s => s.current), playing = usePlayer(s => s.playing), loading = usePlayer(s => s.loading)
@@ -37,9 +37,9 @@ export function Seek({ compact = false }: { compact?: boolean }) {
 }
 function Identity() {
   const track = usePlayer(s => s.track), error = usePlayer(s => s.error), context = usePlayer(s => s.context)
-  return <div className="now-playing"><Artwork blob={track?.metadata.artwork} title={track?.metadata.title ?? 'No track'} /><div><strong>{track?.metadata.title ?? 'Ready when you are'}</strong><span>{error ?? (track ? `${track.metadata.artist || track.filename} · ${context?.kind === 'library' ? 'Library queue' : 'Playlist queue'}` : 'Choose music and press Play')}</span></div></div>
+  return <div className="now-playing"><Artwork blob={track?.metadata.artwork} title={track?.metadata.title ?? 'No track'} /><div><strong>{track?.metadata.title ?? 'Select a track'}</strong><span>{error ?? (track ? `${track.metadata.artist || track.filename} · ${context?.kind === 'library' ? 'Library queue' : context?.kind === 'search' ? 'Search queue' : 'Playlist queue'}` : 'Choose music, then press Play')}</span></div></div>
 }
-export function Player() {
+export function Player({ compact, toggleCompact }: { compact: boolean; toggleCompact: () => void }) {
   const mobile = useMediaQuery('(max-width: 767px)'), narrow = useMediaQuery('(max-width: 1050px)')
   const track = usePlayer(s => s.track)
   const [expanded, setExpanded] = useState(false), [more, setMore] = useState(false), [details, setDetails] = useState(false)
@@ -47,17 +47,18 @@ export function Player() {
   const lyricsOpen = useLyrics(s => s.open)
   const lyricsButton = <button className={`icon-button ghost-button toggle-button lyrics-toggle ${lyricsOpen ? 'active' : ''}`} aria-label="Lyrics" aria-pressed={lyricsOpen} aria-expanded={lyricsOpen} aria-controls="lyrics-panel" data-tooltip="Show synchronized lyrics" onClick={() => { setExpanded(false); setMore(false); toggleLyrics() }}><MessageSquareText size={18} strokeWidth={1.75} /></button>
   return <footer className={`player ${mobile ? 'player-mobile' : ''}`} aria-label="Music player">
-    <div className="player-identity"><Identity />{!mobile && track && <button className="player-audio" aria-label="Audio details" onClick={() => setDetails(true)}><span>{audioSummary(track)}</span><LiveReadout track={track} /></button>}</div>
+    <button className="icon-button player-size-toggle" aria-label={compact ? 'Restore player' : 'Collapse player'} aria-expanded={!compact} onClick={toggleCompact}>{compact ? <ChevronUp size={17} /> : <ChevronDown size={17} />}</button>
+    <div className="player-identity"><Identity />{!compact && !mobile && track && <button className="player-audio" aria-label="Audio details" onClick={() => setDetails(true)}><span>{audioSummary(track)}</span><LiveReadout track={track} /></button>}</div>
     <div className="transport"><div className="transport-buttons">
       {mobile ? <><Transport previous={false} />{lyricsButton}<button className="icon-button" aria-label="Expand player" aria-expanded={expanded} onClick={() => setExpanded(true)}><ChevronUp size={20} /></button></> : <><Transport />{!narrow && <><Toggles /><Volume /></>}{narrow && <>{lyricsButton}<button className="icon-button" aria-label="More player controls" aria-expanded={more} onClick={() => setMore(true)}><MoreHorizontal size={21} /></button></>}</>}
-    </div>{!mobile && <Seek />}</div>
-    {mobile && <Seek compact />}
-    {!mobile && !narrow && <div className="player-secondary">{lyricsButton}</div>}
+    </div>{!compact && !mobile && <Seek />}</div>
+    {!compact && mobile && <Seek compact />}
+    {!mobile && !narrow && <div className="player-secondary">{compact && <button className="icon-button" aria-label="More player controls" aria-expanded={more} onClick={() => setMore(true)}><MoreHorizontal size={21} /></button>}{lyricsButton}</div>}
     {expanded && mobile && <Dialog title="Now playing" className="now-playing-sheet" close={() => setExpanded(false)}>
       <Artwork blob={track?.metadata.artwork} title={track?.metadata.title ?? 'No track'} large /><Identity /><Seek /><div className="sheet-controls"><Transport /><Toggles />{lyricsButton}</div><Volume />
       {track && <details className="sheet-audio" open={audioExpanded} onToggle={event => setAudioExpanded(event.currentTarget.open)}><summary>Audio details</summary>{audioExpanded && <AudioFacts track={track} />}</details>}
     </Dialog>}
-    {more && !mobile && <Dialog title="Player controls" close={() => setMore(false)}><div className="sheet-controls"><Toggles /><Volume /></div>{track && <AudioFacts track={track} />}</Dialog>}
+    {more && !mobile && <Dialog title="Player controls" close={() => setMore(false)}><Seek /><div className="sheet-controls"><Transport /><Toggles /><Volume /></div>{track && <AudioFacts track={track} />}</Dialog>}
     {details && !mobile && track && <AudioDetails track={track} close={() => setDetails(false)} />}
   </footer>
 }

@@ -8,74 +8,136 @@ import { playbackSupport } from '../platform/capabilities/detect'
 import { usePlatformStatus } from '../platform/capabilities/status'
 import type { LibrarySource } from '../platform/filesystem/types'
 import { PortableSource } from '../platform/filesystem/portable'
+import { DirectSource } from '../platform/filesystem/direct'
 import { equalBytes, hashBytes, UnverifiedWriteError } from '../platform/filesystem/saveProtocol'
 import { loadLibraries, saveLibraries, loadHandle, saveHandle, deleteLibrary } from '../platform/persistence/database'
 import { player, usePlayer } from '../playback/player'
 import { scheduleMetadata } from '../metadata/scheduler'
 import { validatePlaylistDeletion } from '../platform/filesystem/deleteProtocol'
 import { forgetLyricsLibrary } from '../lyrics/store'
+import { checkRecovery, requestOrderSync, scheduleSync, syncBusy, withFilesystemLock } from './orderSync'
+import { isFileAccessError, onFileAccessLoss, type AccessIntent } from '../platform/filesystem/accessEvents'
 
 export interface Library {
   id: string; name: string; kind: 'direct' | 'portable'; connected: boolean; scanning: boolean; generation: number
   tracks: Record<string, Track>; playlists: string[]; files: string[]; sessions: Record<string, PlaylistSession>; activePlaylist?: string
   scanError?: string
   hiddenPlaylists?: string[]
+  syncRecovery?: string
+  syncAppliedToken?: string
 }
 interface AppState {
   libraries: Library[]; activeLibrary?: string; view: 'library' | 'playlist' | 'albums'
   ready: boolean; notice?: string; storageError?: string; busy: boolean
   visibleTrackIds: string[]
+  setupLibrary?: string
+  accessIssues: Record<string, { intent: AccessIntent; revision: number; source?: LibrarySource }>
 }
-export const useApp = create<AppState>(() => ({ libraries: [], view: 'library', ready: false, busy: false, visibleTrackIds: [] }))
+export const useApp = create<AppState>(() => ({ libraries: [], view: 'library', ready: false, busy: false, visibleTrackIds: [], accessIssues: {} }))
 export const sources = new Map<string, LibrarySource>()
 const scanners = new Map<string, AbortController>()
 let persistenceTimer: ReturnType<typeof setTimeout> | undefined
 let persistenceChain = Promise.resolve()
 let startup: Promise<void> | undefined
+let accessRevision = 0
+onFileAccessLoss((source, intent) => {
+  const id = [...sources].find(([, current]) => current === source)?.[0]
+  if (id) requestLibraryAccess(id, intent)
+})
+export function requestLibraryAccess(id: string, intent: AccessIntent = 'read') {
+  const state = useApp.getState(), library = state.libraries.find(item => item.id === id), source = sources.get(id)
+  if (!library) return
+  const previous = state.accessIssues[id]
+  if (previous && previous.source === source && (previous.intent === 'read' || previous.intent === intent)) return
+  useApp.setState({ accessIssues: { ...state.accessIssues, [id]: { intent, revision: ++accessRevision, source } } })
+  if (intent === 'read') {
+    scanners.get(id)?.abort()
+    updateLibrary(id, current => ({ ...current, connected: false, scanning: false }), false)
+  }
+}
+export function clearLibraryAccessIssue(id: string, intent: AccessIntent) {
+  if (useApp.getState().accessIssues[id]?.intent !== intent) return
+  useApp.setState(state => ({ accessIssues: Object.fromEntries(Object.entries(state.accessIssues).filter(([key]) => key !== id)) }))
+}
 export const activeLibrary = () => useApp.getState().libraries.find(library => library.id === useApp.getState().activeLibrary)
 export const activeSession = () => { const library = activeLibrary(); return library?.activePlaylist ? library.sessions[library.activePlaylist] : undefined }
+export const findPlaylistSession = (library: Library, pathOrId: string) => library.sessions[pathOrId] ?? playlistSession(library, pathOrId)
 export function notify(notice?: string) { useApp.setState({ notice }) }
 function persistSoon() {
   clearTimeout(persistenceTimer)
   persistenceTimer = setTimeout(() => { void persistNow() }, 300)
 }
-export async function persistNow() {
+export async function persistNow(strict = false) {
   clearTimeout(persistenceTimer)
   const libraries = useApp.getState().libraries
   const task = persistenceChain.then(() => saveLibraries(libraries))
   persistenceChain = task.catch(() => undefined)
-  try { await task }
-  catch { useApp.setState({ storageError: 'Browser storage is unavailable or full. This session still works; save or export your playlist before closing.' }) }
+  try {
+    await task
+    if (useApp.getState().storageError === 'Browser storage is unavailable or full. This session still works; save or export your playlist before closing.') useApp.setState({ storageError: undefined })
+  }
+  catch (error) { useApp.setState({ storageError: 'Browser storage is unavailable or full. This session still works; save or export your playlist before closing.' }); if (strict) throw error }
 }
-function updateLibrary(id: string, update: (library: Library) => Library, persist = true) {
+export async function retryBrowserStorage() {
+  try {
+    await persistNow(true)
+    for (const [id, source] of sources) if (source instanceof DirectSource) await saveHandle(id, source.root)
+    useApp.setState({ storageError: undefined })
+    return true
+  } catch {
+    if (!useApp.getState().storageError) useApp.setState({ storageError: 'Browser storage could not remember folder access. Export playlists before closing and reselect folders next time.' })
+    return false
+  }
+}
+export function updateLibrary(id: string, update: (library: Library) => Library, persist = true) {
   useApp.setState(state => ({ libraries: state.libraries.map(library => library.id === id ? update(library) : library) }))
   syncPlayer()
   if (persist) persistSoon()
 }
 function syncPlayer() {
   const library = activeLibrary(), session = activeSession()
+  const snapshotPlayback = !!library && Object.values(library.sessions).some(item => item.sync)
   const context = usePlayer.getState().context
+  if (context?.kind === 'search') {
+    const searched = useApp.getState().libraries.find(item => item.id === context.libraryId)
+    const entries = searched?.scanning ? player.queue.entries : player.queue.entries.filter(entry => entry.trackId && searched?.tracks[entry.trackId])
+    player.configure(searched ? context : undefined, entries, searched?.tracks ?? {}, searched?.connected ? sources.get(searched.id) : undefined, !!searched && Object.values(searched.sessions).some(item => item.sync))
+    return
+  }
   if (context?.kind === 'library' && context.libraryId === library?.id) {
     // Browsing filters are a snapshot, while fresh metadata and missing files reconcile.
     const entries = library.scanning ? player.queue.entries : player.queue.entries.filter(entry => entry.trackId && library.tracks[entry.trackId])
-    player.configure(context, entries, library.tracks, library.connected ? sources.get(library.id) : undefined)
+    player.configure(context, entries, library.tracks, library.connected ? sources.get(library.id) : undefined, snapshotPlayback)
   } else {
     player.configure(library && session ? { kind: 'playlist', libraryId: library.id, sessionId: session.id } : undefined,
-      session?.entries ?? [], library?.tracks ?? {}, library?.connected ? sources.get(library.id) : undefined)
+      session?.entries ?? [], library?.tracks ?? {}, library?.connected ? sources.get(library.id) : undefined, snapshotPlayback)
   }
 }
 export function playLibraryTrack(id: string, orderedIds = useApp.getState().visibleTrackIds) {
   const library = activeLibrary(), source = library && sources.get(library.id)
+  if (library && (syncBusy(library.id) || library.syncRecovery)) { notify('Wait for filename sync or recover it before starting playback.'); return }
   if (!library?.connected || !source || !library.tracks[id]) { notify('Reconnect the library to play this track.'); return }
   const ids = [...new Set(orderedIds.includes(id) ? orderedIds : [id, ...orderedIds])].filter(key => library.tracks[key])
-  player.configure({ kind: 'library', libraryId: library.id }, ids.map(trackId => ({ id: trackId, trackId })), library.tracks, source)
+  player.configure({ kind: 'library', libraryId: library.id }, ids.map(trackId => ({ id: trackId, trackId })), library.tracks, source, Object.values(library.sessions).some(item => item.sync))
   player.queue.start(id); void player.play(id)
 }
 export function playPlaylistEntry(id: string) {
   const library = activeLibrary(), session = activeSession(), source = library && sources.get(library.id)
+  if (library && (syncBusy(library.id) || library.syncRecovery)) { notify('Wait for filename sync or recover it before starting playback.'); return }
   if (!library?.connected || !session || !source || !session.entries.some(entry => entry.id === id)) return
-  player.configure({ kind: 'playlist', libraryId: library.id, sessionId: session.id }, session.entries, library.tracks, source)
+  player.configure({ kind: 'playlist', libraryId: library.id, sessionId: session.id }, session.entries, library.tracks, source, Object.values(library.sessions).some(item => item.sync))
   player.queue.start(id); void player.play(id)
+}
+export function playSearchTrack(libraryId: string, trackId: string, orderedIds: string[] = [trackId]) {
+  const library = useApp.getState().libraries.find(item => item.id === libraryId), source = sources.get(libraryId), track = library?.tracks[trackId]
+  if (!library?.connected || !source || !track) { notify('Reconnect this library to play its music.'); return false }
+  if (syncBusy(libraryId) || library.syncRecovery) { notify('Wait for filename sync or recover it before starting playback.'); return false }
+  if (track.support === 'unsupported' || track.support === 'failed') { notify('This track cannot be played in this browser.'); return false }
+  const ids = [...new Set(orderedIds.includes(trackId) ? orderedIds : [trackId, ...orderedIds])].filter(id => library.tracks[id])
+  // Scope search playback separately; the active library, playlist and draft stay in place.
+  player.configure({ kind: 'search', libraryId }, ids.map(id => ({ id, trackId: id })), library.tracks, source, Object.values(library.sessions).some(item => item.sync))
+  player.queue.start(trackId); void player.play(trackId)
+  return true
 }
 export function togglePlayback() {
   if (usePlayer.getState().current) { void player.toggle(); return }
@@ -97,13 +159,18 @@ export function bootstrap() {
         sessions: Object.fromEntries(Object.entries(library.sessions).map(([id, session]) => [id, { ...session, undo: [], redo: [],
           status: session.status === 'saving' ? 'unverified' as const : session.status }])) }))
       useApp.setState({ libraries, activeLibrary: libraries[0]?.id })
-      for (const library of libraries.filter(l => l.kind === 'direct')) {
-        const handle = await loadHandle(library.id)
-        if (handle) {
-          const { DirectSource } = await import('../platform/filesystem/direct')
-          const source = new DirectSource(handle)
-          sources.set(library.id, source)
-          if ((await source.getAccess()).read === 'granted') void scanLibrary(library.id)
+      for (const library of libraries) {
+        try {
+          const handle = library.kind === 'direct' ? await loadHandle(library.id) : undefined
+          if (handle) {
+            const source = new DirectSource(handle)
+            sources.set(library.id, source)
+            if ((await source.getAccess()).read === 'granted') void scanLibrary(library.id)
+            else requestLibraryAccess(library.id)
+          } else requestLibraryAccess(library.id)
+        } catch (error) {
+          requestLibraryAccess(library.id)
+          if (!isFileAccessError(error)) useApp.setState({ storageError: 'Folder access could not be remembered. Reselect your music and export playlist copies before closing.' })
         }
       }
     } catch { useApp.setState({ storageError: 'Library remembering is unavailable. You can still select files and export playlists.' }) }
@@ -111,27 +178,30 @@ export function bootstrap() {
   })()
   return startup
 }
-export async function addSource(source: LibrarySource, reconnectId?: string) {
+export async function addSource(source: LibrarySource, reconnectId?: string, setupFolder = source.kind === 'direct') {
   // A quick selection must not be overwritten by asynchronous workspace restore.
   await bootstrap()
   const id = reconnectId ?? newId()
   const existing = useApp.getState().libraries.find(l => l.id === id)
   if (existing && existing.name !== source.name && !confirm(`Reconnect “${existing.name}” to “${source.name}”? Review missing tracks afterward.`)) return
   sources.set(id, source)
+  clearLibraryAccessIssue(id, 'read')
+  clearLibraryAccessIssue(id, 'write')
   if (!existing) useApp.setState(state => ({ libraries: [...state.libraries, { id, name: source.name, kind: source.kind, connected: true,
     scanning: false, generation: 0, tracks: {}, playlists: [], files: [], sessions: {} }], activeLibrary: id, view: 'library' }))
   else updateLibrary(id, library => ({ ...library, kind: source.kind, name: source.name, connected: true }))
-  selectLibrary(id)
+  if (!existing) selectLibrary(id)
   await scanLibrary(id)
+  const current = useApp.getState().libraries.find(library => library.id === id)
+  if (!existing && setupFolder && current?.connected && !current.scanError && !current.syncRecovery && Object.keys(current.tracks).length) useApp.setState({ setupLibrary: id })
 }
 export async function openPortable(files: File[], reconnectId?: string) {
-  try { await addSource(new PortableSource(files), reconnectId) } catch (error) { notify(message(error)) }
+  try { await addSource(new PortableSource(files), reconnectId, files.some(file => !!file.webkitRelativePath)) } catch (error) { notify(message(error)) }
 }
 export async function openDirectory(reconnectId?: string) {
   try {
     const handle = await window.showDirectoryPicker!({ mode: 'read' })
     usePlatformStatus.setState({ pickerReason: undefined })
-    const { DirectSource } = await import('../platform/filesystem/direct')
     let id = reconnectId ?? newId()
     if (!reconnectId) {
       for (const [knownId, source] of sources) {
@@ -142,26 +212,49 @@ export async function openDirectory(reconnectId?: string) {
     try { await saveHandle(id, handle) } catch { useApp.setState({ storageError: 'The folder opened, but its handle could not be remembered. Reselect it next time.' }) }
   } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) { usePlatformStatus.setState({ pickerReason: message(error) }); notify(message(error)) } }
 }
-export async function reconnect(id: string) {
+export async function reconnect(id: string): Promise<boolean> {
   const source = sources.get(id)
-  try { if (source && await source.requestAccess('read')) await scanLibrary(id); else notify('Choose the library folder again to reconnect.') }
-  catch (error) { notify(message(error)) }
+  try {
+    if (source && await source.requestAccess('read') && sources.get(id) === source) {
+      await scanLibrary(id)
+      const connected = !!useApp.getState().libraries.find(item => item.id === id)?.connected
+      if (connected) clearLibraryAccessIssue(id, 'read')
+      return connected
+    }
+    requestLibraryAccess(id)
+    notify('Choose the library folder again to reconnect.')
+  } catch (error) { notify(message(error)) }
+  return false
+}
+export async function restoreWriteAccess(id: string): Promise<boolean> {
+  const source = sources.get(id)
+  try {
+    if (source && await source.requestAccess('write') && sources.get(id) === source) {
+      clearLibraryAccessIssue(id, 'write')
+      notify('Write access restored. Use Save playlist or Retry sync to continue.')
+      return true
+    }
+  } catch (error) { notify(message(error)) }
+  return false
 }
 export async function scanLibrary(id: string) {
   const source = sources.get(id), old = useApp.getState().libraries.find(l => l.id === id)
   if (!source || !old) return
+  if (syncBusy(id)) { notify('Wait for the current filename sync before refreshing.'); return }
+  if (await checkRecovery(id)) return
   scanners.get(id)?.abort()
   const controller = new AbortController(); scanners.set(id, controller)
   const generation = old.generation + 1
   updateLibrary(id, library => ({ ...library, scanning: true, scanError: undefined, generation }), false)
   const tracks: Record<string, Track> = {}, files: string[] = [], playlists: string[] = []
+  const cachedByPath = new Map(Object.values(old.tracks).map(track => [track.path, track]))
   try {
     for await (const file of source.scan(controller.signal)) {
       files.push(file.path)
       const suffix = extension(file.path)
       if (AUDIO_EXTENSIONS.has(suffix)) {
-        const trackId = `${id}:${file.path}`
-        const cached = old.tracks[trackId]
+        const cached = cachedByPath.get(file.path)
+        const trackId = cached?.id ?? newId()
         const parsed = filenameIndex(file.path)
         tracks[trackId] = cached && cached.size === file.size && cached.lastModified === file.lastModified ? cached : {
           id: trackId, path: file.path, filename: filename(file.path), size: file.size, lastModified: file.lastModified, index: parsed.index,
@@ -177,14 +270,17 @@ export async function scanLibrary(id: string) {
     })
     updateLibrary(id, library => ({ ...library, connected: true, scanning: false, tracks, files, playlists: playlists.sort(naturalCompare),
       sessions: Object.fromEntries(Object.entries(library.sessions).map(([key, session]) => [key, { ...session, entries: refreshEntries(session.entries), saved: refreshEntries(session.saved) }])) }))
+    clearLibraryAccessIssue(id, 'read')
     for (const session of Object.values(old.sessions)) await reconcileSource(id, session.id)
+    for (const session of Object.values(old.sessions)) if (session.sync?.enabled) scheduleSync(id, session.id)
     const current = useApp.getState().libraries.find(l => l.id === id)
     const visible = playlists.filter(path => !current?.hiddenPlaylists?.includes(path))
     if (current && !current.activePlaylist && visible.length === 1) await loadPlaylist(visible[0], id)
     scheduleMetadata(id)
   } catch (error) {
     if (controller.signal.aborted) {
-      if (scanners.get(id) === controller) updateLibrary(id, library => ({ ...library, scanning: false, scanError: 'Scan canceled. Refresh to complete the inventory.' }))
+      if (scanners.get(id) === controller) updateLibrary(id, library => ({ ...library, scanning: false,
+        scanError: useApp.getState().accessIssues[id]?.intent === 'read' ? library.scanError : 'Scan canceled. Refresh to complete the inventory.' }))
       return
     }
     updateLibrary(id, library => ({ ...library, scanning: false, connected: false, scanError: message(error) }))
@@ -194,7 +290,7 @@ export function cancelScan(id: string) { scanners.get(id)?.abort() }
 export async function loadPlaylist(path: string, libraryId = activeLibrary()?.id, encoding: 'utf-8' | 'windows-1252' = 'utf-8', reload = false) {
   const library = useApp.getState().libraries.find(l => l.id === libraryId), source = libraryId ? sources.get(libraryId) : undefined
   if (!library || useApp.getState().busy) return false
-  const known = library.sessions[path] ?? Object.values(library.sessions).find(session => session.document.path === path)
+  const known = findPlaylistSession(library, path)
   if (known && !reload) {
     updateLibrary(library.id, current => ({ ...current, activePlaylist: known.id })); selectView('playlist'); return true
   }
@@ -218,7 +314,7 @@ export function playlistNameError(name: string, library = activeLibrary()) {
   if (!name.trim()) return 'Enter a playlist name.'
   const path = name.toLowerCase().endsWith('.m3u8') ? name : `${name}.m3u8`
   if (normalizeRelative(path) !== path || path.includes('\\')) return 'Use a valid library-relative M3U8 name.'
-  if (library.playlists.includes(path) || Object.values(library.sessions).some(session => session.document.path === path)) return 'A playlist with that name already exists. Open it or choose another name.'
+  if (library.playlists.includes(path) || Object.values(library.sessions).some(session => session.document?.path === path)) return 'A playlist with that name already exists. Open it or choose another name.'
 }
 export function createPlaylist(name = 'My playlist.m3u8', paths?: string[], reportError = true) {
   const library = activeLibrary()
@@ -236,43 +332,45 @@ export function createPlaylist(name = 'My playlist.m3u8', paths?: string[], repo
 function entryFor(track: Track, target: string): PlaylistEntry { return { id: newId(), raw: relativeReference(track.path, target), path: track.path, trackId: track.id, prelude: [] } }
 export function updateSession(update: (session: PlaylistSession) => PlaylistSession) {
   const library = activeLibrary(), session = activeSession()
-  if (!library || !session || useApp.getState().busy || session.status === 'unverified') return false
+  if (!library || !session || useApp.getState().busy || session.status === 'unverified' || library.syncRecovery) return false
   updateLibrary(library.id, current => ({ ...current, sessions: { ...current.sessions, [session.id]: update(current.sessions[session.id]) } }))
+  if (session.sync) scheduleSync(library.id, session.id)
   return true
 }
 export function addTracks(ids: string[], play = false) {
   const library = activeLibrary(), session = activeSession()
   if (!library || !session) { notify('Create or open a playlist before adding tracks.'); return }
+  if (session.sync || !session.document) { notify('Filename sync owns the complete folder. Disable sync before editing playlist membership.'); return false }
   try {
-    const entries = ids.flatMap(id => library.tracks[id] ? [entryFor(library.tracks[id], session.document.path)] : [])
+    const entries = ids.flatMap(id => library.tracks[id] ? [entryFor(library.tracks[id], session.document!.path)] : [])
     if (!entries.length || !updateSession(current => edit(current, [...current.entries, ...entries], `Add ${entries.length} tracks`))) return false
     if (play) playPlaylistEntry(entries[0].id)
     return true
   } catch (error) { notify(message(error)) }
 }
-export function removeEntries(ids: Set<string>) { updateSession(session => edit(session, session.entries.filter(entry => !ids.has(entry.id)), `Remove ${ids.size} from playlist`)) }
+export function removeEntries(ids: Set<string>) { if (activeSession()?.sync) { notify('Disable filename sync before removing playlist entries.'); return }; updateSession(session => edit(session, session.entries.filter(entry => !ids.has(entry.id)), `Remove ${ids.size} from playlist`)) }
 export function reorderEntries(ids: Set<string>, destination: number) { updateSession(session => edit(session, moveEntries(session.entries, ids, destination), `Move ${ids.size} tracks`)) }
 export function history(direction: 'undo' | 'redo') { updateSession(session => travel(session, direction)) }
 export function mapEntry(id: string, trackId: string) {
   const track = activeLibrary()?.tracks[trackId]
-  if (!track) return
-  updateSession(session => edit(session, session.entries.map(entry => entry.id === id ? { ...entry, trackId, path: track.path, raw: relativeReference(track.path, session.document.path), issue: undefined, suggestions: undefined } : entry), 'Resolve reference'))
+  if (!track || activeSession()?.sync) return
+  updateSession(session => !session.document ? session : edit(session, session.entries.map(entry => entry.id === id ? { ...entry, trackId, path: track.path, raw: relativeReference(track.path, session.document!.path), issue: undefined, suggestions: undefined } : entry), 'Resolve reference'))
 }
 export function createNormalizedCopy(name: string) {
   const library = activeLibrary(), session = activeSession()
-  if (!library || !session) return
+  if (!library || !session?.document || session.sync) return
   try {
     const path = name.toLowerCase().endsWith('.m3u8') ? name : `${name}.m3u8`
     if (normalizeRelative(path) !== path || library.playlists.includes(path) || library.sessions[path]) throw new Error('Choose a valid, unused M3U8 name.')
     const document = normalizedDocument({ ...session.document, entries: session.entries }, path)
     const entries = document.entries.map(entry => ({ ...entry, id: newId() }))
-    const copy: PlaylistSession = { ...session, id: path, name: filename(path), document, entries, saved: [], baseline: null, undo: [], redo: [], status: 'new', error: undefined }
+    const copy: PlaylistSession = { ...session, sync: undefined, id: path, name: filename(path), document, entries, saved: [], baseline: null, undo: [], redo: [], status: 'new', error: undefined }
     updateLibrary(library.id, current => ({ ...current, activePlaylist: path, sessions: { ...current.sessions, [path]: copy } }))
   } catch (error) { notify(message(error)) }
 }
 export async function reconcileSource(libraryId: string, sessionId: string) {
   const library = useApp.getState().libraries.find(l => l.id === libraryId), source = sources.get(libraryId), session = library?.sessions[sessionId]
-  if (!library || !source || !session || (session.baseline === null && !session.expectedAttempt)) return
+  if (!library || !source || !session?.document || session.sync || (session.baseline === null && !session.expectedAttempt)) return
   try {
     const file = await source.readFile(session.document.path)
     if (file.size > MAX_BYTES) throw new Error('The source exceeds the playlist inspection limit. Export your preserved draft instead.')
@@ -293,6 +391,8 @@ export async function reconcileSource(libraryId: string, sessionId: string) {
 export async function savePlaylist() {
   const library = activeLibrary(), session = activeSession(), source = library ? sources.get(library.id) : undefined
   if (!library || !session || !source || useApp.getState().busy) return
+  if (session.sync) { requestOrderSync(); return }
+  if (!session.document || library.syncRecovery || syncBusy(library.id)) { notify('Finish filename sync recovery before saving.'); return }
   if (session.status === 'unverified') { notify('Reconcile the file before saving again.'); return }
   if (source.kind !== 'direct') { exportPlaylist(); return }
   useApp.setState({ busy: true })
@@ -304,9 +404,9 @@ export async function savePlaylist() {
     const attempt = await hashBytes(bytes)
     updateLibrary(library.id, current => ({ ...current, sessions: { ...current.sessions, [session.id]: { ...session, status: 'saving', expectedAttempt: attempt, error: undefined } } }), false)
     await persistNow()
-    const write = () => source.writePlaylist(session.document.path, bytes, session.baseline)
-    const receipt = navigator.locks ? await navigator.locks.request(`trackindex:${library.id}:${session.document.path}`, write) : await write()
-    updateLibrary(library.id, current => ({ ...current, playlists: [...new Set([...current.playlists, session.document.path])].sort(naturalCompare),
+    const target = session.document.path
+    const receipt = await withFilesystemLock(() => source.writePlaylist(target, bytes, session.baseline))
+    updateLibrary(library.id, current => ({ ...current, playlists: [...new Set([...current.playlists, target])].sort(naturalCompare),
       sessions: { ...current.sessions, [session.id]: { ...session, baseline: receipt.bytes, saved: session.entries, status: 'saved', expectedAttempt: undefined, error: undefined } } }), false)
     await persistNow()
     notify('Playlist saved and verified. Audio files were not changed.')
@@ -321,13 +421,14 @@ export function exportPlaylist() {
   if (!session || !library) return
   try {
     validateInventory(session, library)
-    const bytes = serializePlaylist(session.document, session.entries)
+    const target = session.document ?? emptyDocument(`${session.name.replace(/\.m3u8$/i, '') || 'Playlist'}.m3u8`)
+    const bytes = serializePlaylist(target, session.entries)
     const blob = new Blob([new Uint8Array(bytes).buffer], { type: 'audio/x-mpegurl;charset=utf-8' })
     const url = URL.createObjectURL(blob), link = document.createElement('a')
-    link.href = url; link.download = filename(session.document.path); document.body.append(link); link.click(); link.remove()
+    link.href = url; link.download = filename(target.path); document.body.append(link); link.click(); link.remove()
     setTimeout(() => URL.revokeObjectURL(url), 10_000)
-    updateSession(current => ({ ...current, status: 'download' }))
-    notify(`Download requested. Place ${filename(session.document.path)} at ${session.document.path} inside your library so relative paths work. The original file has not been updated.`)
+    if (!session.sync) updateSession(current => ({ ...current, status: 'download' }))
+    notify(`Download requested. Place ${filename(target.path)} at ${target.path} inside your library so relative paths work. The original file has not been updated.`)
   } catch (error) { notify(message(error)) }
 }
 function validateInventory(session: PlaylistSession, library: Library) {
@@ -335,8 +436,11 @@ function validateInventory(session: PlaylistSession, library: Library) {
   if (session.entries.some(entry => !entry.trackId || !library.tracks[entry.trackId] || library.tracks[entry.trackId].path !== entry.path)) throw new Error('A referenced track is missing from the library. Resolve it or remove it before saving or exporting.')
 }
 export async function forgetLibrary(id: string) {
+  const library = useApp.getState().libraries.find(item => item.id === id)
+  if (syncBusy(id) || library?.syncRecovery) { notify('Finish filename sync recovery before forgetting this library.'); return }
   scanners.get(id)?.abort(); sources.delete(id)
-  useApp.setState(state => ({ libraries: state.libraries.filter(library => library.id !== id), activeLibrary: state.activeLibrary === id ? state.libraries.find(l => l.id !== id)?.id : state.activeLibrary }))
+  useApp.setState(state => ({ libraries: state.libraries.filter(library => library.id !== id), activeLibrary: state.activeLibrary === id ? state.libraries.find(l => l.id !== id)?.id : state.activeLibrary,
+    accessIssues: Object.fromEntries(Object.entries(state.accessIssues).filter(([key]) => key !== id)) }))
   syncPlayer()
   try {
     await forgetLyricsLibrary(id)
@@ -345,19 +449,22 @@ export async function forgetLibrary(id: string) {
   persistSoon()
 }
 export function playlistPaths(library: Library) {
-  return [...new Set([...library.playlists, ...Object.values(library.sessions).map(session => session.document.path)])]
+  return [...new Set([...library.playlists, ...Object.values(library.sessions).map(session => session.document?.path ?? session.id)])]
     .filter(path => !library.hiddenPlaylists?.includes(path)).sort(naturalCompare)
 }
 export function playlistSession(library: Library, path: string) {
-  return Object.values(library.sessions).find(session => session.document.path === path)
+  // A legacy M3U source and its converted M3U8 output are distinct file
+  // actions. Call findPlaylistSession when an internal session ID is allowed.
+  return Object.values(library.sessions).find(session => session.document ? session.document.path === path : session.id === path)
 }
 export function removePlaylistFromApp(path: string, deleted = false, libraryId = activeLibrary()?.id) {
   const library = useApp.getState().libraries.find(item => item.id === libraryId)
   if (!library || useApp.getState().busy || library.scanning) return
-  const affected = Object.values(library.sessions).filter(session => session.document.path === path)
+  const affected = Object.values(library.sessions).filter(session => (session.document?.path ?? session.id) === path)
+  if (library.syncRecovery || syncBusy(library.id) || affected.some(session => session.sync)) { notify('Disable filename sync before removing its playlist from the app.'); return }
   const activeRemoved = affected.some(session => session.id === library.activePlaylist)
   updateLibrary(library.id, current => ({ ...current,
-    sessions: Object.fromEntries(Object.entries(current.sessions).filter(([, session]) => session.document.path !== path)),
+    sessions: Object.fromEntries(Object.entries(current.sessions).filter(([, session]) => (session.document?.path ?? session.id) !== path)),
     activePlaylist: activeRemoved ? undefined : current.activePlaylist,
     hiddenPlaylists: deleted ? (current.hiddenPlaylists ?? []).filter(item => item !== path) : current.playlists.includes(path) ? [...new Set([...(current.hiddenPlaylists ?? []), path])] : current.hiddenPlaylists,
     playlists: deleted ? current.playlists.filter(item => item !== path) : current.playlists,
@@ -378,6 +485,7 @@ export async function inspectPlaylistDeletion(path: string) {
   if (file.size > MAX_BYTES) throw new Error('This playlist exceeds the inspection limit. Use your file manager instead.')
   const bytes = new Uint8Array(await file.arrayBuffer())
   const session = playlistSession(library, path)
+  if (session?.sync || library.syncRecovery || syncBusy(library.id)) throw new Error('Disable filename sync and finish recovery before deleting a playlist file.')
   if (session?.status === 'unverified') throw new Error('Reconcile this playlist before deleting its file.')
   if (session?.baseline && !equalBytes(bytes, session.baseline)) throw new Error('The playlist changed outside Meloark. Reload or review the source before deleting it.')
   return bytes
@@ -385,12 +493,12 @@ export async function inspectPlaylistDeletion(path: string) {
 export async function deletePlaylistFile(path: string, expected: Uint8Array) {
   const library = activeLibrary(), source = library && sources.get(library.id)
   if (!library?.connected || !source?.deletePlaylist || useApp.getState().busy || library.scanning || !library.playlists.includes(path)) return false
+  if (library.syncRecovery || syncBusy(library.id) || playlistSession(library, path)?.sync) throw new Error('Disable filename sync before deleting its playlist file.')
   validatePlaylistDeletion(path)
   useApp.setState({ busy: true })
   try {
     if (!await source.requestAccess('write')) throw new Error('Write permission was not granted. The playlist has not been deleted.')
-    const remove = () => source.deletePlaylist!(path, expected)
-    const receipt = navigator.locks ? await navigator.locks.request(`trackindex:${library.id}:${path}`, remove) : await remove()
+    const receipt = await withFilesystemLock(() => source.deletePlaylist!(path, expected))
     if (receipt.path !== path || !receipt.deleted) throw new Error('Deletion was not verified. Reconcile the library.')
     // The source adapter verified absence. Cache failure cannot undo that filesystem outcome.
     useApp.setState({ busy: false })

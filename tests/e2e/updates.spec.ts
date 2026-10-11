@@ -1,3 +1,4 @@
+import { trackRow } from './helpers/ui'
 import { test, expect, type Page } from '@playwright/test'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -42,8 +43,8 @@ test('transport and filter toggles retain distinct state on hover and keyboard f
   const shuffle = page.getByRole('button', { name: 'Shuffle', exact: true })
   await shuffle.hover(); const off = await surface(page, 'Shuffle')
   await shuffle.click(); await expect(shuffle).toHaveAttribute('aria-pressed', 'true')
-  const on = await surface(page, 'Shuffle'); expect(on).not.toEqual(off)
-  await shuffle.focus(); await page.keyboard.press('Space'); await expect(shuffle).toHaveAttribute('aria-pressed', 'false')
+  await expect.poll(() => surface(page, 'Shuffle')).not.toEqual(off)
+  await shuffle.focus(); await page.keyboard.press('Enter'); await expect(shuffle).toHaveAttribute('aria-pressed', 'false')
   await page.getByRole('button', { name: 'Repeat: off', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Repeat: all', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('button', { name: 'Repeat: all', exact: true }).click()
@@ -54,9 +55,12 @@ test('transport and filter toggles retain distinct state on hover and keyboard f
   await expect(page.getByRole('button', { name: 'Unmute', exact: true })).toHaveAttribute('aria-pressed', 'true')
   const filters = page.getByRole('button', { name: 'Track filters', exact: true })
   await filters.hover(); const before = await surface(page, 'Track filters'); await filters.click()
-  await expect(filters).toHaveAttribute('aria-expanded', 'true'); expect(await surface(page, 'Track filters')).not.toEqual(before)
+  await expect(filters).toHaveAttribute('aria-expanded', 'true')
+  await expect.poll(() => surface(page, 'Track filters')).not.toEqual(before)
   const exportButton = page.getByRole('button', { name: 'Export', exact: true }); await exportButton.hover()
-  await page.mouse.down(); expect(await exportButton.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none'); await page.mouse.up()
+  await page.mouse.down()
+  await expect.poll(() => exportButton.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none')
+  await page.mouse.up()
 })
 
 test('desktop collapse persists and rail keeps library selection reachable', async ({ page }) => {
@@ -66,6 +70,7 @@ test('desktop collapse persists and rail keeps library selection reachable', asy
   await page.getByRole('button', { name: 'Libraries and playlists', exact: true }).click()
   await expect(page.getByRole('dialog')).toBeVisible(); await page.keyboard.press('Escape')
   await page.reload(); await expect(page.locator('.app')).toHaveClass(/collapsed/)
+  await page.getByRole('dialog', { name: 'Reselect your music' }).getByRole('button', { name: 'Not now', exact: true }).click()
   await page.getByRole('button', { name: 'Expand sidebar', exact: true }).click(); await expect(page.locator('.app')).not.toHaveClass(/collapsed/)
 })
 
@@ -75,9 +80,9 @@ test('mobile navigation, group editing, and expanded player share transport stat
   await expect(page.getByRole('dialog', { name: 'Navigation', exact: true })).toBeVisible()
   await page.keyboard.press('Escape'); await expect(open).toBeFocused()
   await page.getByRole('button', { name: 'Select tracks', exact: true }).click()
-  await page.getByRole('checkbox', { name: 'Select First', exact: true }).check()
-  await page.getByRole('checkbox', { name: 'Select Second', exact: true }).check()
-  await page.getByRole('button', { name: 'Move down', exact: true }).click()
+  await trackRow(page, 'First').click({ modifiers: ['ControlOrMeta'] })
+  await trackRow(page, 'Second').click({ modifiers: ['ControlOrMeta'] })
+  await trackRow(page, 'First').press('Alt+ArrowDown')
   await expect(page.locator('.track-title strong')).toHaveText(['Third', 'First', 'Second'])
   await page.getByRole('button', { name: 'Undo', exact: true }).click()
   await expect(page.locator('.track-title strong')).toHaveText(['First', 'Second', 'Third'])
@@ -100,7 +105,7 @@ test('workspace and capability cards fit narrow, landscape, and zoom-equivalent 
     const mobile = width < 768
     if (mobile) await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click()
     await (mobile ? page.getByRole('dialog', { name: 'Navigation', exact: true }) : page.getByRole('main')).getByRole('button', { name: 'Browser capabilities', exact: true }).click()
-    await expect(page.getByText('Save playlists', { exact: true })).toBeVisible()
+    await expect(page.getByText('Save playlists to a folder', { exact: true })).toBeVisible()
     expect(await page.getByRole('dialog').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
     await page.getByRole('dialog').locator('summary').click()
     await expect(page.getByText('Playlist export', { exact: true })).toBeVisible()
@@ -138,8 +143,11 @@ test('empty and reviewed multi-folder creation reject duplicate names and recove
   try {
     for (const folder of ['One', 'Two']) { await mkdir(join(root, folder)); await writeFile(join(root, folder, '001 - Song.wav'), wavSample()); await writeFile(join(root, folder, 'Unindexed.wav'), wavSample()) }
     await page.goto('/'); await page.getByLabel('Select library folder', { exact: true }).setInputFiles(root)
+    await expect(page.getByRole('dialog').filter({ hasText: 'Set up' })).toBeVisible()
+    await expect(page.getByRole('radio', { name: /Numbered filenames only/ })).toBeDisabled()
+    await page.getByRole('button', { name: 'Browse first', exact: true }).click()
     await page.getByRole('button', { name: 'New playlist', exact: true }).click(); await page.getByLabel('Playlist name', { exact: true }).fill('Empty')
-    await page.getByRole('button', { name: 'Create draft', exact: true }).click(); await expect(page.getByText('Make room for your favorites')).toBeVisible()
+    await page.getByRole('button', { name: 'Create draft', exact: true }).click(); await expect(page.getByText('Playlist is empty')).toBeVisible()
     await page.getByRole('button', { name: 'New playlist', exact: true }).click(); await page.getByLabel('Playlist name', { exact: true }).fill('Empty'); await page.getByRole('button', { name: 'Create draft', exact: true }).click()
     await expect(page.getByRole('dialog')).toBeVisible(); await page.getByLabel('Playlist name', { exact: true }).fill('Reviewed')
     await page.getByRole('radio', { name: /Review filename order/ }).check(); await expect(page.getByText(/2 folders are grouped/)).toBeVisible()

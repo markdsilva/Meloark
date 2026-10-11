@@ -12,12 +12,12 @@ beforeEach(() => {
 describe('workspace shell', () => {
   it('offers portable selection and privacy information without gating the app', async () => {
     render(<App />)
-    expect(screen.getByRole('heading', { name: /Your music.*At home/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /A home for your.*local music/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Choose a music folder' })).toBeEnabled()
-    expect(screen.getByText('No uploads. No account. Just your library.')).toBeInTheDocument()
+    expect(screen.getByText('Music stays local')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Play$/ })).toBeDisabled()
-    await userEvent.click(screen.getByRole('button', { name: 'See capabilities' }))
-    expect(screen.getByRole('dialog')).toHaveAccessibleName('Your browser, your library')
-    expect(screen.getByText('No music uploads')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Browser support' }))
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Help & browser support')
+    expect(screen.getByRole('heading', { name: /^Available$/ })).toBeInTheDocument()
   })
 })
